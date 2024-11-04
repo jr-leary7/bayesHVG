@@ -1,0 +1,28 @@
+Package: bayesHVG
+Type: Package
+Title: Identify Highly Variable Genes via Bayesian Inference
+Version: 0.0.1
+Authors@R: c(person(given = c("Jack", "R."), family = "Leary", email = "j.leary@ufl.edu", role = c("aut", "cre"), comment = c(ORCID = "0009-0004-8821-3269")))
+Description: The bayesHVG method implements highly variable gene (HVG) identification in scRNA-seq data using Bayesian hierarchical models.
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.3.2
+Depends: 
+  magrittr, 
+  rstanarm, 
+  R (>= 3.5.0)
+Imports: 
+    stats, 
+    withr, 
+    tidyr, 
+    dplyr, 
+    Seurat, 
+    BiocGenerics, 
+    SingleCellExperiment, 
+    SummarizedExperiment
+URL: https://github.com/jr-leary7/bayesHVG
+BugReports: https://github.com/jr-leary7/bayesHVG/issues
+Suggests: 
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
