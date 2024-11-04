@@ -7,9 +7,11 @@ Description: The bayesHVG method implements highly variable gene (HVG) identific
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.2
+LazyData: true
+LazyDataCompression: xz
 Depends: 
+  INLA, 
   magrittr, 
-  rstanarm, 
   R (>= 3.5.0)
 Imports: 
     stats, 
@@ -22,6 +24,7 @@ Imports:
     BiocGenerics, 
     SingleCellExperiment, 
     SummarizedExperiment
+Additional_repositories: https://inla.r-inla-download.org/R/testing
 URL: https://github.com/jr-leary7/bayesHVG
 BugReports: https://github.com/jr-leary7/bayesHVG/issues
 Suggests: 

@@ -4,19 +4,35 @@
 \alias{findVariableFeaturesBayes}
 \title{Identify highly variable genes in a Bayesian manner.}
 \usage{
-findVariableFeaturesBayes(expr.mat = NULL)
+findVariableFeaturesBayes(
+  sc.obj = NULL,
+  subject.id = NULL,
+  n.marginal.samples = 5000L,
+  n.cells.sample = 500L,
+  n.cores = 4L
+)
 }
 \arguments{
-\item{expr.mat}{Either an object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
+\item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
+
+\item{subject.id}{A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.}
+
+\item{n.marginal.samples}{An integer specifying the number of samples to take from the marginal distribution when computing estimates and credible intervals. Defults to 5000.}
+
+\item{n.cores}{An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.}
+
+\item{n.cells.subsample}{An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.}
 }
 \value{
-Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added, or a \code{data.frame} containing HVG results.
+Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 }
 \description{
-This function implements HVG identification using Bayesian inference to model the posterior distribution of the mean and variance of each gene.
+This function implements HVG estimation using Bayesian inference to model the posterior distribution of the mean and variance of each gene.
 }
 \seealso{
 \code{\link[Seurat]{FindVariableFeatures}}
+
+\code{\link[scran]{modelGeneVar}}
 }
 \author{
 Jack R. Leary

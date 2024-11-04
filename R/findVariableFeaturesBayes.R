@@ -2,18 +2,17 @@
 #'
 #' @name findVariableFeaturesBayes
 #' @author Jack R. Leary
-#' @description This function implements HVG identification using Bayesian inference to model the posterior distribution of the mean and variance of each gene.
-#' @param expr.mat An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
+#' @description This function implements HVG estimation using Bayesian inference to model the posterior distribution of the mean and variance of each gene.
+#' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
 #' @param subject.id A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.
-#' @param min.cell.depth
-#' @param min.genes.per.cell
+#' @param n.marginal.samples An integer specifying the number of samples to take from the marginal distribution when computing estimates and credible intervals. Defults to 5000. 
+#' @param n.cells.subsample An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500. 
 #' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
 #' @import INLA
 #' @import magrittr
 #' @importFrom SingleCellExperiment colData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
-#' @importFrom Matrix colSums rowSums
 #' @importFrom dplyr mutate select filter rowwise ungroup
 #' @importFrom tidyr pivot_longer
 #' @importFrom stats as.formula quantile
@@ -21,36 +20,32 @@
 #' @importFrom stringr str_detect
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
+#' @seealso \code{\link[scran]{modelGeneVar}}
 #' @export
 
-findVariableFeaturesBayes <- function(expr.mat = NULL,
+findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       subject.id = NULL,
-                                      min.cell.depth = 1000L,
-                                      min.genes.per.cell = 10L,
-                                      n.samples = 5000L,
+                                      n.marginal.samples = 5000L,
+                                      n.cells.sample = 500L, 
                                       n.cores = 4L) {
   # check inputs
-  if (is.null(expr.mat)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
+  if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
   # extract (sparse) counts matrix
-  if (inherits(expr.mat, "SingleCellExperiment")) {
+  if (inherits(sc.obj, "SingleCellExperiment")) {
     if (!is.null(subject.id)) {
-      subject_vec <- SingleCellExperiment::colData(expr.mat)[[subject.id]]
+      subject_vec <- SingleCellExperiment::colData(sc.obj)[[subject.id]]
     }
-    expr.mat <- BiocGenerics::counts(expr.mat)
-  } else if (inherits(expr.mat, "Seurat")) {
+    expr_mat <- BiocGenerics::counts(sc.obj)
+  } else if (inherits(sc.obj, "Seurat")) {
     if (!is.null(subject.id)) {
-      subject_vec <- expr.mat@meta.data[[subject.id]]
+      subject_vec <- sc.obj@meta.data[[subject.id]]
     }
-    expr.mat <- Seurat::GetAssayData(expr.mat,
+    expr_mat <- Seurat::GetAssayData(sc.obj,
                                      layer = "counts",
-                                     assay = Seurat::DefaultAssay(expr.mat))
+                                     assay = Seurat::DefaultAssay(sc.obj))
   }
-  # filter out low quality cells and genes
-  keep_cells <- which(Matrix::colSums(expr.mat) >= min.cell.depth)
-  keep_genes <- which(Matrix::rowSums(expr.mat > 0) >= min.genes.per.cell)
-  expr.mat <- expr.mat[keep_genes, keep_cells]
   # convert to data.frame for modeling
-  expr_df <- as.data.frame(expr.mat) %>%
+  expr_df <- as.data.frame(expr_mat) %>%
              dplyr::mutate(gene = rownames(.), .before = 1)
   if (!is.null(subject.id)) {
     expr_df <- dplyr::mutate(subject = subject_vec, .before = 2)
@@ -67,24 +62,24 @@ findVariableFeaturesBayes <- function(expr.mat = NULL,
                                    values_to = "count") %>%
                dplyr::with_groups(gene,
                                   dplyr::slice_sample,
-                                  n = 500L) %>%
+                                  n = n.cells.subsample) %>%
                #dplyr::filter(gene %in% c("CD8A", "NKG7", "MS4A1", "MALAT1", "CD3G", "CD14")) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)))
   }
   # create model formula
   if (!is.null(subject.id)) {
-    model_formula <- stats::as.formula("count ~ 1 + f(gene, model = 'iid') + f(subject, model = 'iid')")
+    model_formula <- stats::as.formula("count ~ 1 + gene + f(subject, model = 'iid')")
   } else {
-    model_formula <- stats::as.formula("count ~ 1 + f(gene, model = 'iid')")
+    model_formula <- stats::as.formula("count ~ 1 + gene")
   }
   # fit hierarchical bayesian model via integrated nested laplace approximation
   withr::with_output_sink(tempfile(), {
     bayes_fit <- INLA::inla(model_formula,
                             data = expr_df,
                             family = "nbinomial",
-                            control.compute = list(dic = TRUE, cpo = TRUE),
+                            control.compute = list(dic = TRUE, cpo = FALSE),
                             control.predictor = list(compute = TRUE),
-                            control.inla = list(strategy = "gaussian"),
+                            control.inla = list(strategy = "gaussian", int.strategy = "eb"),
                             num.threads = n.cores,
                             verbose = TRUE)
   })
@@ -105,7 +100,7 @@ findVariableFeaturesBayes <- function(expr.mat = NULL,
     return(sample_res)
   }
   mu_samples <- sapply(gene_effects, \(x) {
-    samples_log_mu <- sampleMarginal(x, n = n.samples)
+    samples_log_mu <- sampleMarginal(x, n = n.marginal.samples)
     samples_mu <- exp(samples_log_mu)
     return(samples_mu)
   })
