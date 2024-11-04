@@ -17,6 +17,8 @@ Imports:
     tidyr, 
     dplyr, 
     Seurat, 
+    Matrix, 
+    stringr, 
     BiocGenerics, 
     SingleCellExperiment, 
     SummarizedExperiment
