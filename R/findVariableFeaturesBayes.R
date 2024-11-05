@@ -88,7 +88,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             verbose = TRUE,
                             debug = TRUE)
   })
-  # extract estimates and generate credible intervals for mean & variance
+  # extract estimates and generate credible intervals for mean, variance, & dispersion
   phi_row <- dplyr::mutate(bayes_fit$summary.hyperpar,
                            name = rownames(bayes_fit$summary.hyperpar),
                            .before = 1) %>%
