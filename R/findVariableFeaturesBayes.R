@@ -129,5 +129,5 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                              dispersion_ci_upper = apply(dispersion_samples, 2, stats::quantile, probs = 0.975)) %>%
                   magrittr::set_rownames(.$gene) %>%
                   dplyr::arrange(dplyr::desc(dispersion_mean))
-
+  # add gene-level estimates to object metadata -- TODO
 }
