@@ -21,6 +21,7 @@ Imports:
     Seurat, 
     Matrix, 
     stringr, 
+    S4Vectors, 
     BiocGenerics, 
     SingleCellExperiment, 
     SummarizedExperiment

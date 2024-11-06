@@ -13,11 +13,12 @@
 #' @importFrom SingleCellExperiment colData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
-#' @importFrom dplyr mutate select with_groups slice_sample filter arrange desc
+#' @importFrom dplyr mutate select with_groups slice_sample filter arrange desc left_join
 #' @importFrom tidyr pivot_longer
 #' @importFrom stats as.formula quantile
 #' @importFrom withr with_output_sink
 #' @importFrom stringr str_detect
+#' @importFrom S4Vectors DataFrame
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
 #' @seealso \code{\link[scran]{modelGeneVar}}
@@ -129,5 +130,24 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                              dispersion_ci_upper = apply(dispersion_samples, 2, stats::quantile, probs = 0.975)) %>%
                   magrittr::set_rownames(.$gene) %>%
                   dplyr::arrange(dplyr::desc(dispersion_mean))
-  # add gene-level estimates to object metadata -- TODO
+  # add gene-level estimates to object metadata
+  if (inherits(sc.obj, "SingleCellExperiment")) {
+    gene_summary_s4 <- SingleCellExperiment::rowData(sc.obj) %>% 
+                       as.data.frame() %>% 
+                       dplyr::mutate(gene = rownames(.), .before = 1) %>% 
+                       dplyr::left_join(gene_summary, by = "gene") %>% 
+                       S4Vectors::DataFrame()
+    SingleCellExperiment::rowData(sc.obj) <- gene_summary_s4
+  } else if (inherits(sc.obj, "Seurat")) {
+    orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
+    if (nrow(orig_metadata) > 0) {
+      new_metadata <- dplyr::mutate(orig_metadata, 
+                                    gene = rownames(orig_metadata), 
+                                    .before = 1) %>% 
+                      dplyr::left_join(gene_summary, by = "gene")
+      sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- new_metadata
+    } else {
+      sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
+    }
+  }
 }
