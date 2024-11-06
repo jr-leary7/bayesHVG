@@ -3,7 +3,7 @@ Type: Package
 Title: Identify Highly Variable Genes via Bayesian Inference
 Version: 0.0.1
 Authors@R: c(person(given = c("Jack", "R."), family = "Leary", email = "j.leary@ufl.edu", role = c("aut", "cre"), comment = c(ORCID = "0009-0004-8821-3269")))
-Description: The bayesHVG method implements highly variable gene (HVG) identification in scRNA-seq data using Bayesian hierarchical models.
+Description: The bayesHVG method implements efficient highly variable gene (HVG) identification in scRNA-seq data using Bayesian hierarchical models.
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.2
@@ -16,6 +16,7 @@ Imports:
     withr, 
     tidyr, 
     dplyr, 
+    purrr, 
     Seurat, 
     Matrix, 
     stringr, 

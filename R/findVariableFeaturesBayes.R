@@ -10,7 +10,7 @@
 #' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
 #' @import INLA
 #' @import magrittr
-#' @importFrom SingleCellExperiment colData
+#' @importFrom SingleCellExperiment colData rowData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
 #' @importFrom dplyr mutate select with_groups slice_sample filter arrange desc left_join
@@ -18,6 +18,7 @@
 #' @importFrom stats as.formula quantile
 #' @importFrom withr with_output_sink
 #' @importFrom stringr str_detect
+#' @importFrom purrr map_dbl
 #' @importFrom S4Vectors DataFrame
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
@@ -89,43 +90,49 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             verbose = TRUE,
                             debug = TRUE)
   })
-  # extract estimates and generate credible intervals for mean, variance, & dispersion
-  phi_row <- dplyr::mutate(bayes_fit$summary.hyperpar,
-                           name = rownames(bayes_fit$summary.hyperpar),
-                           .before = 1) %>%
-             dplyr::filter(stringr::str_detect(name, "size"))
+  # sample from marginal distribution for gene mean 
+  intercept_marginal <- bayes_fit$marginals.fixed[["(Intercept)"]]
+  intercept_samples <- sampleMarginal(intercept_marginal, n = n.marginal.samples)
   gene_effects <- bayes_fit$marginals.random$gene
   gene_names_indices <- names(gene_effects)
   gene_indices <- as.numeric(stringr::str_extract(gene_names_indices, "\\d+"))
   gene_names <- levels(expr_df$gene)[gene_indices]
-  intercept_marginal <- bayes_fit$marginals.fixed[["(Intercept)"]]
-  intercept_samples <- sampleMarginal(intercept_marginal, n = n.marginal.samples)
   mu_samples <- sapply(gene_effects, \(x) {
     samples_log_re <- sampleMarginal(x, n = n.marginal.samples)
     samples_log_mu <- intercept_samples + samples_log_re
     samples_mu <- exp(samples_log_mu)
     return(samples_mu)
   })
+  # sample from marginal distribution for overdispersion parameter 
+  phi_row <- dplyr::mutate(bayes_fit$summary.hyperpar,
+                           name = rownames(bayes_fit$summary.hyperpar),
+                           .before = 1) %>%
+             dplyr::filter(stringr::str_detect(name, "size"))
   phi_marginal <- bayes_fit$marginals.hyperpar[[phi_row$name]]
   phi_samples <- sampleMarginal(phi_marginal, n.marginal.samples)
   phi_matrix <- matrix(phi_samples,
                        nrow = n.marginal.samples,
                        ncol = length(gene_names),
                        byrow = FALSE)
+  # estimate variance & dispersion samples based on formula for negative-binomial variance 
   var_samples <- mu_samples + (mu_samples^2 / phi_matrix)
   dispersion_samples <- var_samples / mu_samples
-  gene_summary <- data.frame(gene = gene_names,
-                             mu_mean = apply(mu_samples, 2, mean),
-                             mu_ci_lower = apply(mu_samples, 2, stats::quantile, probs = 0.025),
-                             mu_ci_upper = apply(mu_samples, 2, stats::quantile, probs = 0.975),
-                             var_mean = apply(var_samples, 2, mean),
-                             var_ci_lower = apply(var_samples, 2, stats::quantile, probs = 0.025),
-                             var_ci_upper = apply(var_samples, 2, stats::quantile, probs = 0.975),
-                             dispersion_mean = apply(dispersion_samples, 2, mean),
-                             dispersion_ci_lower = apply(dispersion_samples, 2, stats::quantile, probs = 0.025),
-                             dispersion_ci_upper = apply(dispersion_samples, 2, stats::quantile, probs = 0.975)) %>%
+  mu_samples <- as.data.frame(mu_samples)
+  var_samples <- as.data.frame(var_samples)
+  dispersion_samples <- as.data.frame(dispersion_samples)
+  # generate central tendency estimates and credible intervals for each parameter 
+  gene_summary <- data.frame(gene = gene_names, 
+                             mu = purrr::map_dbl(mu_samples, mean), 
+                             mu_ci_lower = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.025)), 
+                             mu_ci_upper = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.975)), 
+                             var = purrr::map_dbl(var_samples, mean), 
+                             var_ci_lower = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.025)), 
+                             var_ci_upper = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.975)), 
+                             dispersion = purrr::map_dbl(dispersion_samples, mean), 
+                             dispersion_ci_lower = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.025)), 
+                             dispersion_ci_upper = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.975))) %>%
                   magrittr::set_rownames(.$gene) %>%
-                  dplyr::arrange(dplyr::desc(dispersion_mean))
+                  dplyr::arrange(dplyr::desc(dispersion))
   # add gene-level estimates to object metadata
   if (inherits(sc.obj, "SingleCellExperiment")) {
     gene_summary_s4 <- SingleCellExperiment::rowData(sc.obj) %>%

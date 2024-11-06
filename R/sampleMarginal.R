@@ -15,6 +15,6 @@ sampleMarginal <- function(marginal.dist = NULL, n = 1000L) {
   # check inputs
   if (is.null(marginal.dist) || !INLA::inla.is.marginal(marginal.dist)) { stop("Please provide a valid marginal distribution to sampleMarginal().") }
   # generate samples
-  sample_res <- INLA::inla.rmarginal(n, marginal = marginal.dist)
-  return(sample_res)
+  marginal_samples <- INLA::inla.rmarginal(n, marginal = marginal.dist)
+  return(marginal_samples)
 }
