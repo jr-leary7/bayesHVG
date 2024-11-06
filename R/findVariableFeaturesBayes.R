@@ -98,10 +98,6 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   gene_names_indices <- names(gene_effects)
   gene_indices <- as.numeric(stringr::str_extract(gene_names_indices, "\\d+"))
   gene_names <- levels(expr_df$gene)[gene_indices]
-  sampleMarginal <- function(marginal, n = 1000L) {
-    sample_res <- INLA::inla.rmarginal(n, marginal = marginal)
-    return(sample_res)
-  }
   intercept_marginal <- bayes_fit$marginals.fixed[["(Intercept)"]]
   intercept_samples <- sampleMarginal(intercept_marginal, n = n.marginal.samples)
   mu_samples <- sapply(gene_effects, \(x) {
