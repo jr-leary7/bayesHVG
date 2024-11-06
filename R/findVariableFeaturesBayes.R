@@ -81,9 +81,9 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     bayes_fit <- INLA::inla(model_formula,
                             data = expr_df,
                             family = "nbinomial",
-                            control.compute = list(dic = TRUE, cpo = FALSE),
+                            control.compute = list(dic = FALSE, cpo = FALSE),
                             control.predictor = list(compute = TRUE, link = 1),
-                            control.inla = list(strategy = "gaussian", int.strategy = "eb"),
+                            control.inla = list(strategy = "simplified.laplace", int.strategy = "eb"),
                             control.family = list(hyper = list(theta = list(prior = "loggamma", param = c(1, 1)))),
                             num.threads = n.cores,
                             verbose = TRUE,
@@ -132,21 +132,22 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                   dplyr::arrange(dplyr::desc(dispersion_mean))
   # add gene-level estimates to object metadata
   if (inherits(sc.obj, "SingleCellExperiment")) {
-    gene_summary_s4 <- SingleCellExperiment::rowData(sc.obj) %>% 
-                       as.data.frame() %>% 
-                       dplyr::mutate(gene = rownames(.), .before = 1) %>% 
-                       dplyr::left_join(gene_summary, by = "gene") %>% 
+    gene_summary_s4 <- SingleCellExperiment::rowData(sc.obj) %>%
+                       as.data.frame() %>%
+                       dplyr::mutate(gene = rownames(.), .before = 1) %>%
+                       dplyr::left_join(gene_summary, by = "gene") %>%
                        S4Vectors::DataFrame()
     SingleCellExperiment::rowData(sc.obj) <- gene_summary_s4
   } else if (inherits(sc.obj, "Seurat")) {
     orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
-    if (nrow(orig_metadata) > 0) {
-      new_metadata <- dplyr::mutate(orig_metadata, 
-                                    gene = rownames(orig_metadata), 
-                                    .before = 1) %>% 
+    if (ncol(orig_metadata) > 0) {
+      new_metadata <- dplyr::mutate(orig_metadata,
+                                    gene = rownames(orig_metadata),
+                                    .before = 1) %>%
                       dplyr::left_join(gene_summary, by = "gene")
       sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- new_metadata
     } else {
+      gene_summary <- gene_summary[rownames(sc.obj), ]
       sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
     }
   }

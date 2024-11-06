@@ -7,8 +7,6 @@ Description: The bayesHVG method implements highly variable gene (HVG) identific
 License: MIT + file LICENSE
 Encoding: UTF-8
 RoxygenNote: 7.3.2
-LazyData: true
-LazyDataCompression: xz
 Depends: 
   INLA, 
   magrittr, 
