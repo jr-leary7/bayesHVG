@@ -77,7 +77,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   } else {
     model_formula <- stats::as.formula("count ~ 1 + f(gene, model = 'iid')")
   }
-  # fit hierarchical bayesian model via integrated nested laplace approximation
+  # fit negative-binomial hierarchical bayesian model via integrated nested laplace approximation
   withr::with_output_sink(tempfile(), {
     bayes_fit <- INLA::inla(model_formula,
                             data = expr_df,
@@ -86,7 +86,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             control.compute = list(dic = FALSE, cpo = FALSE),
                             control.predictor = list(compute = TRUE, link = 1),
                             control.inla = list(strategy = "simplified.laplace", int.strategy = "eb"),
-                            control.family = list(hyper = list(theta = list(prior = "loggamma", param = c(1, 1)))),
+                            control.family = list(variant = 0),
                             num.threads = n.cores,
                             verbose = TRUE,
                             debug = TRUE)
@@ -146,7 +146,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
     if (ncol(orig_metadata) > 0) {
       new_metadata <- dplyr::mutate(orig_metadata,
-                                    gene = rownames(orig_metadata),
+                                    gene = rownames(sc.obj),
                                     .before = 1) %>%
                       dplyr::left_join(gene_summary, by = "gene")
       sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- new_metadata

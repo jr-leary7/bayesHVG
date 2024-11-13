@@ -24,10 +24,10 @@ Imports:
     BiocGenerics, 
     SingleCellExperiment, 
     SummarizedExperiment
+Suggests: 
+    testthat (>= 3.0.0)
 Additional_repositories: https://inla.r-inla-download.org/R/testing
 URL: https://github.com/jr-leary7/bayesHVG
 BugReports: https://github.com/jr-leary7/bayesHVG/issues
-Suggests: 
-    testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
