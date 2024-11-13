@@ -46,7 +46,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                      layer = "counts",
                                      assay = Seurat::DefaultAssay(sc.obj))
   }
-  # convert to data.frame for modeling
+  # convert counts matrix to long data.frame for modeling
   expr_df <- as.data.frame(expr_mat) %>%
              dplyr::mutate(gene = rownames(.), .before = 1)
   if (!is.null(subject.id)) {
@@ -82,6 +82,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     bayes_fit <- INLA::inla(model_formula,
                             data = expr_df,
                             family = "nbinomial",
+                            control.fixed = list(mean.intercept = 0, prec.intercept = 0.000001),
                             control.compute = list(dic = FALSE, cpo = FALSE),
                             control.predictor = list(compute = TRUE, link = 1),
                             control.inla = list(strategy = "simplified.laplace", int.strategy = "eb"),
@@ -90,7 +91,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             verbose = TRUE,
                             debug = TRUE)
   })
-  # sample from marginal distribution for gene mean 
+  # sample from marginal distribution for gene mean
   intercept_marginal <- bayes_fit$marginals.fixed[["(Intercept)"]]
   intercept_samples <- sampleMarginal(intercept_marginal, n = n.marginal.samples)
   gene_effects <- bayes_fit$marginals.random$gene
@@ -103,7 +104,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     samples_mu <- exp(samples_log_mu)
     return(samples_mu)
   })
-  # sample from marginal distribution for overdispersion parameter 
+  # sample from marginal distribution for overdispersion parameter
   phi_row <- dplyr::mutate(bayes_fit$summary.hyperpar,
                            name = rownames(bayes_fit$summary.hyperpar),
                            .before = 1) %>%
@@ -114,22 +115,22 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                        nrow = n.marginal.samples,
                        ncol = length(gene_names),
                        byrow = FALSE)
-  # estimate variance & dispersion samples based on formula for negative-binomial variance 
+  # estimate variance & dispersion samples based on formula for negative-binomial variance
   var_samples <- mu_samples + (mu_samples^2 / phi_matrix)
   dispersion_samples <- var_samples / mu_samples
   mu_samples <- as.data.frame(mu_samples)
   var_samples <- as.data.frame(var_samples)
   dispersion_samples <- as.data.frame(dispersion_samples)
-  # generate central tendency estimates and credible intervals for each parameter 
-  gene_summary <- data.frame(gene = gene_names, 
-                             mu = purrr::map_dbl(mu_samples, mean), 
-                             mu_ci_lower = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.025)), 
-                             mu_ci_upper = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.975)), 
-                             var = purrr::map_dbl(var_samples, mean), 
-                             var_ci_lower = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.025)), 
-                             var_ci_upper = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.975)), 
-                             dispersion = purrr::map_dbl(dispersion_samples, mean), 
-                             dispersion_ci_lower = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.025)), 
+  # generate central tendency estimates and credible intervals for each parameter
+  gene_summary <- data.frame(gene = gene_names,
+                             mu = purrr::map_dbl(mu_samples, mean),
+                             mu_ci_lower = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.025)),
+                             mu_ci_upper = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.975)),
+                             var = purrr::map_dbl(var_samples, mean),
+                             var_ci_lower = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.025)),
+                             var_ci_upper = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.975)),
+                             dispersion = purrr::map_dbl(dispersion_samples, mean),
+                             dispersion_ci_lower = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.025)),
                              dispersion_ci_upper = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.975))) %>%
                   magrittr::set_rownames(.$gene) %>%
                   dplyr::arrange(dplyr::desc(dispersion))
