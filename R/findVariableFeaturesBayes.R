@@ -2,23 +2,23 @@
 #'
 #' @name findVariableFeaturesBayes
 #' @author Jack R. Leary
-#' @description This function implements HVG estimation using Bayesian inference to model the posterior distribution of the mean and variance of each gene.
+#' @description This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean, variance, and dispersion of each gene.
 #' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
 #' @param subject.id A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.
-#' @param n.marginal.samples An integer specifying the number of samples to take from the marginal distribution when computing estimates and credible intervals. Defults to 5000.
 #' @param n.cells.subsample An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.
+#' @param n.chains (Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 4. 
 #' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
-#' @import INLA
+#' @import cmdstanr
 #' @import magrittr
 #' @importFrom SingleCellExperiment colData rowData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
 #' @importFrom dplyr mutate select with_groups slice_sample filter arrange desc left_join
 #' @importFrom tidyr pivot_longer
+#' @importFrom tidyselect matches all_of everything  
 #' @importFrom stats as.formula quantile
 #' @importFrom withr with_output_sink
-#' @importFrom stringr str_detect
-#' @importFrom purrr map_dbl
+#' @importFrom brms set_prior brm bf negbinomial
 #' @importFrom S4Vectors DataFrame
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
@@ -27,8 +27,8 @@
 
 findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       subject.id = NULL,
-                                      n.marginal.samples = 5000L,
                                       n.cells.subsample = 500L,
+                                      n.chains = 4L, 
                                       n.cores = 4L) {
   # check inputs
   if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
@@ -77,63 +77,51 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   } else {
     model_formula <- stats::as.formula("count ~ 1 + f(gene, model = 'iid')")
   }
-  # fit negative-binomial hierarchical bayesian model via integrated nested laplace approximation
+  # set up priors 
+  priors <- c(brms::set_prior("normal(0, 5)", class = "Intercept", resp = "mu"),
+              brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "mu"), 
+              brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
+              brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
+  # fit negative-binomial hierarchical bayesian model via variational inference  
   withr::with_output_sink(tempfile(), {
-    bayes_fit <- INLA::inla(model_formula,
-                            data = expr_df,
-                            family = "nbinomial",
-                            control.fixed = list(mean.intercept = 0, prec.intercept = 0.000001),
-                            control.compute = list(dic = FALSE, cpo = FALSE),
-                            control.predictor = list(compute = TRUE, link = 1),
-                            control.inla = list(strategy = "simplified.laplace", int.strategy = "eb"),
-                            control.family = list(variant = 0),
-                            num.threads = n.cores,
-                            verbose = TRUE,
-                            debug = TRUE)
+    brms_fit <- brms::brm(brms::bf(count ~ 1 + (1 | gene), shape ~ gene),
+                          data = expr_df2,
+                          family = brms::negbinomial(link = "log", link_shape = "log"),
+                          chains = n.chains,  
+                          iter = 1000,
+                          warmup = 250, 
+                          cores = n.cores, 
+                          silent = 0, 
+                          backend = "cmdstanr", 
+                          algorithm = "meanfield", 
+                          seed = random.seed)
   })
-  # sample from marginal distribution for gene mean
-  intercept_marginal <- bayes_fit$marginals.fixed[["(Intercept)"]]
-  intercept_samples <- sampleMarginal(intercept_marginal, n = n.marginal.samples)
-  gene_effects <- bayes_fit$marginals.random$gene
-  gene_names_indices <- names(gene_effects)
-  gene_indices <- as.numeric(stringr::str_extract(gene_names_indices, "\\d+"))
-  gene_names <- levels(expr_df$gene)[gene_indices]
-  mu_samples <- sapply(gene_effects, \(x) {
-    samples_log_re <- sampleMarginal(x, n = n.marginal.samples)
-    samples_log_mu <- intercept_samples + samples_log_re
-    samples_mu <- exp(samples_log_mu)
-    return(samples_mu)
-  })
-  # sample from marginal distribution for overdispersion parameter
-  phi_row <- dplyr::mutate(bayes_fit$summary.hyperpar,
-                           name = rownames(bayes_fit$summary.hyperpar),
-                           .before = 1) %>%
-             dplyr::filter(stringr::str_detect(name, "size"))
-  phi_marginal <- bayes_fit$marginals.hyperpar[[phi_row$name]]
-  phi_samples <- sampleMarginal(phi_marginal, n.marginal.samples)
-  phi_matrix <- matrix(phi_samples,
-                       nrow = n.marginal.samples,
-                       ncol = length(gene_names),
-                       byrow = FALSE)
-  # estimate variance & dispersion samples based on formula for negative-binomial variance
-  var_samples <- mu_samples + (mu_samples^2 / phi_matrix)
-  dispersion_samples <- var_samples / mu_samples
-  mu_samples <- as.data.frame(mu_samples)
-  var_samples <- as.data.frame(var_samples)
-  dispersion_samples <- as.data.frame(dispersion_samples)
+  # sample from approximate posterior distribution for gene mean
+  mu_random_effects <- dplyr::select(posterior_samples, tidyselect::matches("r_gene.*Intercept"))
+  mu_intercept <- posterior_samples$b_Intercept
+  mu_long <- tidyr::pivot_longer(mu_random_effects, 
+                                 cols = tidyselect::everything(), 
+                                 names_to = "gene", 
+                                 values_to = "mu_re")
+  # sample from approximate posterior distribution for overdispersion parameter
+  shape_columns <- grep("^b_shape_gene.*", colnames(posterior_samples), value = TRUE)
+  shape_summary <- dplyr::select(posterior_samples, tidyselect::all_of(shape_columns)) %>%
+                   tidyr::pivot_longer(cols = tidyselect::everything(), 
+                                       names_to = "gene", 
+                                       values_to = "shape_log") %>%
+                   dplyr::mutate(gene = gsub("b_shape_gene", "", gene),
+                                 shape = exp(shape_log)) %>%
+                   dplyr::with_groups(gene, 
+                                      dplyr::summarise, 
+                                      theta_mean = mean(shape),
+                                      theta_sd = sd(shape),
+                                      theta_lower = stats::quantile(shape, 0.025),
+                                      theta_upper = stats::quantile(shape, 0.975)) %>%
+                   dplyr::arrange(dplyr::desc(theta_mean))
+  # estimate variance based on formula for negative-binomial variance
+  
   # generate central tendency estimates and credible intervals for each parameter
-  gene_summary <- data.frame(gene = gene_names,
-                             mu = purrr::map_dbl(mu_samples, mean),
-                             mu_ci_lower = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.025)),
-                             mu_ci_upper = purrr::map_dbl(mu_samples, \(x) stats::quantile(x, probs = 0.975)),
-                             var = purrr::map_dbl(var_samples, mean),
-                             var_ci_lower = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.025)),
-                             var_ci_upper = purrr::map_dbl(var_samples, \(x) stats::quantile(x, probs = 0.975)),
-                             dispersion = purrr::map_dbl(dispersion_samples, mean),
-                             dispersion_ci_lower = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.025)),
-                             dispersion_ci_upper = purrr::map_dbl(dispersion_samples, \(x) stats::quantile(x, probs = 0.975))) %>%
-                  magrittr::set_rownames(.$gene) %>%
-                  dplyr::arrange(dplyr::desc(dispersion))
+  
   # add gene-level estimates to object metadata
   if (inherits(sc.obj, "SingleCellExperiment")) {
     gene_summary_s4 <- SingleCellExperiment::rowData(sc.obj) %>%
