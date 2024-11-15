@@ -20,6 +20,7 @@ Imports:
     Seurat, 
     Matrix, 
     S4Vectors, 
+    posterior, 
     tidyselect, 
     BiocGenerics, 
     SingleCellExperiment, 
