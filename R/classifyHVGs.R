@@ -11,7 +11,7 @@
 #' @importFrom SingleCellExperiment rowData
 #' @importFrom Seurat DefaultAssay VariableFeatures 
 #' @importFrom dplyr select arrange desc slice_head pull mutate filter if_else 
-#' @importFrom tidselect starts_with
+#' @importFrom tidyselect starts_with
 #' @importFrom stats quantile
 #' @importFrom S4Vectors DataFrame
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.

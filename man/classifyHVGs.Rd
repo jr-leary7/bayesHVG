@@ -9,7 +9,7 @@ classifyHVGs(sc.obj = NULL)
 \arguments{
 \item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
 
-\item{selection.method}{A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", "quantile". Defaults to "rank".}
+\item{selection.method}{A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", or, "cutoff", or "quantile". Defaults to "rank".}
 
 \item{n.HVG}{An integer specifying the number of HVGs to select (if using rank-based selection). Defaults to 2000.}
 
@@ -23,6 +23,8 @@ After estimating per-gene statistics, classify genes as highly variable or not i
 }
 \seealso{
 \code{\link{findVariableFeaturesBayes}}
+
+\code{\link[SeuratObject]{HVFInfo}}
 }
 \author{
 Jack R. Leary
