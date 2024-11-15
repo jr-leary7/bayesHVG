@@ -84,7 +84,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   }
   # set up priors
   priors <- c(brms::set_prior("normal(0, 10)", class = "Intercept", resp = "mu"),
-              brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "mu"),
+              brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "mu"), 
               brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
