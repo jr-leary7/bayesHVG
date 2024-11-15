@@ -14,17 +14,14 @@ Depends:
 Imports: 
     brms, 
     stats, 
-    withr, 
     tidyr, 
     dplyr, 
     Seurat, 
-    Matrix, 
     S4Vectors, 
     posterior, 
     tidyselect, 
     BiocGenerics, 
-    SingleCellExperiment, 
-    SummarizedExperiment
+    SingleCellExperiment
 Suggests: 
     testthat (>= 3.0.0)
 Additional_repositories: https://mc-stan.org/r-packages/

@@ -27,7 +27,7 @@ findVariableFeaturesBayes(
 \item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
 }
 \value{
-Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
+Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added.
 }
 \description{
 This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean, variance, and dispersion of each gene.

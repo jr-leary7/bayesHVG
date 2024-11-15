@@ -14,15 +14,14 @@
 #' @importFrom SingleCellExperiment colData rowData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
-#' @importFrom dplyr mutate select with_groups slice_sample filter arrange desc left_join pull
+#' @importFrom dplyr mutate select with_groups slice_sample filter summarise arrange desc left_join pull
 #' @importFrom tidyr pivot_longer
 #' @importFrom tidyselect matches all_of everything
-#' @importFrom stats as.formula quantile
-#' @importFrom withr with_output_sink
+#' @importFrom stats quantile
 #' @importFrom brms set_prior brm bf negbinomial
 #' @importFrom posterior as_draws_df
 #' @importFrom S4Vectors DataFrame
-#' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added.
+#' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added to the appropriate metadata slot.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
 #' @seealso \code{\link[scran]{modelGeneVar}}
 #' @export
@@ -74,13 +73,15 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                   n = n.cells.subsample) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)))
   }
-  # convert from tibble to data.frame
-  expr_df <- as.data.frame(expr_df)
+  # convert from tibble to data.frame & convert count to integer to save space
+  expr_df <- as.data.frame(expr_df) %>% 
+             dplyr::mutate(count = as.integer(count)) %>% 
+             dplyr::select(-cell)
   # create model formula
   if (!is.null(subject.id)) {
     model_formula <- brms::bf(count ~ 1 + (1 | gene) + (1 | subject), shape ~ gene)
   } else {
-    model_formula <- brms::bf(count ~ 1 + (1 | gene), shape ~ gene)
+    model_formula <- brms::bf(count ~ 1 + (1 | gene), shape ~ 1 + (1 | gene))
   }
   # set up priors
   priors <- c(brms::set_prior("normal(0, 10)", class = "Intercept", resp = "mu"),
@@ -88,24 +89,23 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
               brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
-  withr::with_output_sink(tempfile(), {
-    brms_fit <- brms::brm(model_formula,
-                          data = expr_df,
-                          family = brms::negbinomial(link = "log", link_shape = "log"),
-                          chains = n.chains,
-                          iter = 1000,
-                          warmup = 250,
-                          cores = n.cores,
-                          silent = 0,
-                          backend = "cmdstanr",
-                          algorithm = "meanfield",
-                          seed = random.seed)
-  })
+  brms_fit <- brms::brm(model_formula,
+                        data = expr_df,
+                        family = brms::negbinomial(link = "log", link_shape = "log"),
+                        chains = n.chains,
+                        iter = 1000,
+                        warmup = 250,
+                        thin = 5, 
+                        cores = n.cores,
+                        silent = 2,
+                        backend = "cmdstanr",
+                        algorithm = "meanfield",
+                        seed = random.seed)
   # draw samples from approximate posterior
   posterior_samples <- as.data.frame(posterior::as_draws_df(brms_fit))
   # estimate posterior gene means
   mu_intercept <- dplyr::pull(posterior_samples, b_Intercept)
-  mu_random_effects <- dplyr::select(posterior_samples, tidyselect::matches("r_gene.*Intercept")) %>%
+  mu_random_effects <- dplyr::select(posterior_samples, tidyselect::matches("r_gene\\[.*Intercept")) %>%
                        dplyr::mutate(intercept = mu_intercept)
   mu_summary <- tidyr::pivot_longer(mu_random_effects,
                                     cols = !intercept,
@@ -121,29 +121,24 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                    mu_ci_ll = stats::quantile(mu, 0.025),
                                    mu_ci_ul = stats::quantile(mu, 0.975))
   # estimate posterior gene dispersions
-  colnames(posterior_samples)[colnames(posterior_samples) == "b_shape_Intercept"] <- paste0("b_shape_gene", levels(expr_df$gene)[1])
-  theta_columns <- grep("^b_shape_gene.*", colnames(posterior_samples), value = TRUE)
-  theta_summary <- dplyr::select(posterior_samples, tidyselect::all_of(theta_columns)) %>%
-                   tidyr::pivot_longer(cols = tidyselect::everything(),
+  theta_intercept <- dplyr::pull(posterior_samples, b_shape_Intercept)
+  theta_random_effects <- dplyr::select(posterior_samples, tidyselect::matches("r_gene__shape\\[.*Intercept")) %>%
+                          dplyr::mutate(intercept = theta_intercept)
+  theta_summary <- tidyr::pivot_longer(theta_random_effects,
+                                       cols = !intercept,
                                        names_to = "gene",
-                                       values_to = "shape_log") %>%
-                   as.data.frame() %>%
-                   dplyr::mutate(gene = gsub("b_shape_gene", "", gene),
-                                 shape = exp(shape_log)) %>%
+                                       values_to = "theta_re") %>%
+                   as.data.frame() %>% 
+                   dplyr::mutate(gene = gsub(",Intercept\\]", "", gsub("r_gene__shape\\[", "", gene)),
+                                 theta = 1 / exp(intercept + theta_re)) %>%
                    dplyr::with_groups(gene,
                                       dplyr::summarise,
-                                      theta_mean = mean(shape),
-                                      theta_sd = sd(shape),
-                                      theta_ci_ll = stats::quantile(shape, 0.025),
-                                      theta_ci_ul = stats::quantile(shape, 0.975))
+                                      theta_mean = mean(theta),
+                                      theta_var = var(theta),
+                                      theta_ci_ll = stats::quantile(theta, 0.025),
+                                      theta_ci_ul = stats::quantile(theta, 0.975))
   # estimate posterior gene variances based on formula for negative-binomial variance
-  gene_summary <- dplyr::bind_cols(mu_summary, dplyr::select(theta_summary, -gene)) %>%
-                  dplyr::rowwise() %>%
-                  dplyr::mutate(var_mean = mu_mean + (mu_mean^2 / theta_mean),
-                                var_ci_ll = mu_ci_ll + (mu_ci_ll^2 / theta_ci_ul),
-                                var_ci_ul = mu_ci_ul + (mu_ci_ul^2 / theta_ci_ll)) %>%
-                  dplyr::ungroup() %>%
-                  as.data.frame() %>%
+  gene_summary <- dplyr::inner_join(mu_summary, theta_summary, by = "gene") %>%
                   magrittr::set_rownames(.$gene)
   # add gene-level estimates to object metadata
   if (inherits(sc.obj, "SingleCellExperiment")) {
@@ -166,4 +161,5 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
       sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
     }
   }
+  return(sc.obj)
 }
