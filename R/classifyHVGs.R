@@ -19,7 +19,10 @@
 #' @seealso \code{\link[SeuratObject]{HVFInfo}}
 #' @export
 
-classifyHVGs <- function(sc.obj = NULL) {
+classifyHVGs <- function(sc.obj = NULL, 
+                         selection.method = "rank", 
+                         n.HVG = 2000L, 
+                         quantile.HVG = 0.75) {
   # check inputs 
   if (is.null(sc.obj)) { stop("Please provide an object to classifyHVGs().") }
   # extract gene mean & dispersion statistics 
@@ -28,10 +31,6 @@ classifyHVGs <- function(sc.obj = NULL) {
   } else if (inherits(sc.obj, "Seurat")) {
     gene_summary <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
   }
-  gene_summary <- dplyr::select(gene_summary, 
-                                gene, 
-                                tidyselect::starts_with("mu"), 
-                                tidyselect::starts_with("theta"))
   # identify HVGs based on user-specified method 
   if (selection.method == "rank") {
     hvgs <- dplyr::arrange(gene_summary, dplyr::desc(theta_mean)) %>% 
@@ -44,7 +43,7 @@ classifyHVGs <- function(sc.obj = NULL) {
             dplyr::pull(gene)
   }
   # add HVG classification back to object metadata 
-  gene_summary <- dplyr::mutate(hvg = dplyr::if_else(gene %in% hvgs, TRUE, FALSE))
+  gene_summary <- dplyr::mutate(gene_summary, hvg = dplyr::if_else(gene %in% hvgs, TRUE, FALSE))
   if (inherits(sc.obj, "SingleCellExperiment")) {
     SingleCellExperiment::rowData(sc.obj) <- S4Vectors::DataFrame(gene_summary)
   } else if (inherits(sc.obj, "Seurat")) {

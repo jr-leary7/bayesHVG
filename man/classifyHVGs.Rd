@@ -4,7 +4,12 @@
 \alias{classifyHVGs}
 \title{Classify genes as highly variable.}
 \usage{
-classifyHVGs(sc.obj = NULL)
+classifyHVGs(
+  sc.obj = NULL,
+  selection.method = "rank",
+  n.HVG = 2000L,
+  quantile.HVG = 0.75
+)
 }
 \arguments{
 \item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}

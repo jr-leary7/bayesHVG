@@ -2,11 +2,12 @@
 #'
 #' @name findVariableFeaturesBayes
 #' @author Jack R. Leary
-#' @description This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean, variance, and dispersion of each gene.
+#' @description This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean and dispersion of each gene.
 #' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
 #' @param subject.id A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.
 #' @param n.cells.subsample An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.
 #' @param n.chains (Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 4.
+#' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5. 
 #' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
 #' @param random.seed A double specifying the random seed to be used when fitting the model. Defaults to 312.
 #' @import cmdstanr
@@ -30,6 +31,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       subject.id = NULL,
                                       n.cells.subsample = 500L,
                                       n.chains = 4L,
+                                      thin.rate = 5L, 
                                       n.cores = 4L,
                                       random.seed = 312) {
   # check inputs
@@ -95,7 +97,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                         chains = n.chains,
                         iter = 1000,
                         warmup = 250,
-                        thin = 5, 
+                        thin = thin.rate, 
                         cores = n.cores,
                         silent = 2,
                         backend = "cmdstanr",
@@ -137,7 +139,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       theta_var = var(theta),
                                       theta_ci_ll = stats::quantile(theta, 0.025),
                                       theta_ci_ul = stats::quantile(theta, 0.975))
-  # estimate posterior gene variances based on formula for negative-binomial variance
+  # coerce summaries to a single data.frame 
   gene_summary <- dplyr::inner_join(mu_summary, theta_summary, by = "gene") %>%
                   magrittr::set_rownames(.$gene)
   # add gene-level estimates to object metadata

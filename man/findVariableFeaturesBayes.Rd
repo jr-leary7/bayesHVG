@@ -9,6 +9,7 @@ findVariableFeaturesBayes(
   subject.id = NULL,
   n.cells.subsample = 500L,
   n.chains = 4L,
+  thin.rate = 5L,
   n.cores = 4L,
   random.seed = 312
 )
@@ -22,6 +23,8 @@ findVariableFeaturesBayes(
 
 \item{n.chains}{(Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 4.}
 
+\item{thin.rate}{(Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.}
+
 \item{n.cores}{An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.}
 
 \item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
@@ -30,7 +33,7 @@ findVariableFeaturesBayes(
 Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added to the appropriate metadata slot.
 }
 \description{
-This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean, variance, and dispersion of each gene.
+This function implements HVG estimation using Bayesian variational inference to approximate the posterior distribution of the mean and dispersion of each gene.
 }
 \seealso{
 \code{\link[Seurat]{FindVariableFeatures}}
