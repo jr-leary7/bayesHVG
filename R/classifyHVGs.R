@@ -4,14 +4,14 @@
 #' @author Jack R. Leary
 #' @description After estimating per-gene statistics, classify genes as highly variable or not in a variety of ways.
 #' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
-#' @param selection.method A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", or, "cutoff", or "quantile". Defaults to "rank".  
+#' @param selection.method A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", "quantile", or "cutoff". Defaults to "rank".  
 #' @param n.HVG An integer specifying the number of HVGs to select (if using rank-based selection). Defaults to 2000. 
 #' @param quantile.HVG A double specifying the quantile cutoff used to classify HVGs (if using quantile-based selection). Defaults to 0.75. 
+#' @param dispersion.cutoff A double specifying the cutoff value for dispersion used to classify HVGs (if using cutoff-based selection). Defaults to 3. 
 #' @import magrittr
 #' @importFrom SingleCellExperiment rowData
 #' @importFrom Seurat DefaultAssay VariableFeatures 
 #' @importFrom dplyr select arrange desc slice_head pull mutate filter if_else 
-#' @importFrom tidyselect starts_with
 #' @importFrom stats quantile
 #' @importFrom S4Vectors DataFrame
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
@@ -22,9 +22,12 @@
 classifyHVGs <- function(sc.obj = NULL, 
                          selection.method = "rank", 
                          n.HVG = 2000L, 
-                         quantile.HVG = 0.75) {
+                         quantile.HVG = 0.75, 
+                         dispersion.cutoff = 3) {
   # check inputs 
   if (is.null(sc.obj)) { stop("Please provide an object to classifyHVGs().") }
+  selection.method <- tolower(selection.method)
+  if (!selection.method %in% c("rank", "quantile", "cutoff")) { stop("Please provide a valid HVG selection method to classifyHVGs().") }
   # extract gene mean & dispersion statistics 
   if (inherits(sc.obj, "SingleCellExperiment")) {
     gene_summary <- as.data.frame(SingleCellExperiment::rowData(sc.obj))
@@ -40,6 +43,10 @@ classifyHVGs <- function(sc.obj = NULL,
     quantile_cutoff <- stats::quantile(gene_summary$theta_mean, quantile.HVG)
     hvgs <- dplyr::arrange(gene_summary, dplyr::desc(theta_mean)) %>% 
             dplyr::filter(theta_mean <= quantile_cutoff) %>% 
+            dplyr::pull(gene)
+  } else if (selection.method == "cutoff") {
+    hvgs <- dplyr::arrange(gene_summary, dplyr::desc(theta_mean)) %>% 
+            dplyr::filter(theta_mean <= cutoff) %>% 
             dplyr::pull(gene)
   }
   # add HVG classification back to object metadata 

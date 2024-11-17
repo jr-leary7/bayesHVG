@@ -8,17 +8,20 @@ classifyHVGs(
   sc.obj = NULL,
   selection.method = "rank",
   n.HVG = 2000L,
-  quantile.HVG = 0.75
+  quantile.HVG = 0.75,
+  dispersion.cutoff = 3
 )
 }
 \arguments{
 \item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
 
-\item{selection.method}{A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", or, "cutoff", or "quantile". Defaults to "rank".}
+\item{selection.method}{A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", "quantile", or "cutoff". Defaults to "rank".}
 
 \item{n.HVG}{An integer specifying the number of HVGs to select (if using rank-based selection). Defaults to 2000.}
 
 \item{quantile.HVG}{A double specifying the quantile cutoff used to classify HVGs (if using quantile-based selection). Defaults to 0.75.}
+
+\item{dispersion.cutoff}{A double specifying the cutoff value for dispersion used to classify HVGs (if using cutoff-based selection). Defaults to 3.}
 }
 \value{
 Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.

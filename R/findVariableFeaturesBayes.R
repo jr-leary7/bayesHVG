@@ -19,6 +19,7 @@
 #' @importFrom tidyr pivot_longer
 #' @importFrom tidyselect matches all_of everything
 #' @importFrom stats quantile
+#' @importFrom withr with_output_sink
 #' @importFrom brms set_prior brm bf negbinomial
 #' @importFrom posterior as_draws_df
 #' @importFrom S4Vectors DataFrame
@@ -91,18 +92,20 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
               brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
-  brms_fit <- brms::brm(model_formula,
-                        data = expr_df,
-                        family = brms::negbinomial(link = "log", link_shape = "log"),
-                        chains = n.chains,
-                        iter = 1000,
-                        warmup = 250,
-                        thin = thin.rate, 
-                        cores = n.cores,
-                        silent = 2,
-                        backend = "cmdstanr",
-                        algorithm = "meanfield",
-                        seed = random.seed)
+  withr::with_output_sink(tempfile(), {
+    brms_fit <- brms::brm(model_formula,
+                          data = expr_df,
+                          family = brms::negbinomial(link = "log", link_shape = "log"),
+                          chains = n.chains,
+                          iter = 1000,
+                          warmup = 250,
+                          thin = thin.rate, 
+                          cores = n.cores,
+                          silent = 2,
+                          backend = "cmdstanr",
+                          algorithm = "meanfield",
+                          seed = random.seed)
+  })
   # draw samples from approximate posterior
   posterior_samples <- as.data.frame(posterior::as_draws_df(brms_fit))
   # estimate posterior gene means

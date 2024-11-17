@@ -13,6 +13,7 @@ Depends:
   R (>= 3.5.0)
 Imports: 
     brms, 
+    withr, 
     stats, 
     tidyr, 
     dplyr, 
