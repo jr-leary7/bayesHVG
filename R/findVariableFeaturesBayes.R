@@ -10,6 +10,7 @@
 #' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5. 
 #' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
 #' @param random.seed A double specifying the random seed to be used when fitting the model. Defaults to 312.
+#' @param verbose (Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE. 
 #' @import cmdstanr
 #' @import magrittr
 #' @importFrom SingleCellExperiment colData rowData
@@ -34,7 +35,8 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       n.chains = 4L,
                                       thin.rate = 5L, 
                                       n.cores = 4L,
-                                      random.seed = 312) {
+                                      random.seed = 312, 
+                                      verbose = FALSE) {
   # check inputs
   if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
   # extract (sparse) counts matrix
@@ -92,7 +94,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
               brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
-  withr::with_output_sink(tempfile(), {
+  if (verbose) {
     brms_fit <- brms::brm(model_formula,
                           data = expr_df,
                           family = brms::negbinomial(link = "log", link_shape = "log"),
@@ -105,7 +107,22 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                           backend = "cmdstanr",
                           algorithm = "meanfield",
                           seed = random.seed)
-  })
+  } else {
+    withr::with_output_sink(tempfile(), {
+      brms_fit <- brms::brm(model_formula,
+                            data = expr_df,
+                            family = brms::negbinomial(link = "log", link_shape = "log"),
+                            chains = n.chains,
+                            iter = 1000,
+                            warmup = 250,
+                            thin = thin.rate, 
+                            cores = n.cores,
+                            silent = 2,
+                            backend = "cmdstanr",
+                            algorithm = "meanfield",
+                            seed = random.seed)
+    })
+  }
   # draw samples from approximate posterior
   posterior_samples <- as.data.frame(posterior::as_draws_df(brms_fit))
   # estimate posterior gene means

@@ -11,7 +11,8 @@ findVariableFeaturesBayes(
   n.chains = 4L,
   thin.rate = 5L,
   n.cores = 4L,
-  random.seed = 312
+  random.seed = 312,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ findVariableFeaturesBayes(
 \item{n.cores}{An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.}
 
 \item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
+
+\item{verbose}{(Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.}
 }
 \value{
 Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added to the appropriate metadata slot.

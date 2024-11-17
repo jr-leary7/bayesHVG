@@ -42,11 +42,11 @@ classifyHVGs <- function(sc.obj = NULL,
   } else if (selection.method == "quantile") {
     quantile_cutoff <- stats::quantile(gene_summary$theta_mean, quantile.HVG)
     hvgs <- dplyr::arrange(gene_summary, dplyr::desc(theta_mean)) %>% 
-            dplyr::filter(theta_mean <= quantile_cutoff) %>% 
+            dplyr::filter(theta_mean >= quantile_cutoff) %>% 
             dplyr::pull(gene)
   } else if (selection.method == "cutoff") {
     hvgs <- dplyr::arrange(gene_summary, dplyr::desc(theta_mean)) %>% 
-            dplyr::filter(theta_mean <= cutoff) %>% 
+            dplyr::filter(theta_mean >= dispersion.cutoff) %>% 
             dplyr::pull(gene)
   }
   # add HVG classification back to object metadata 
