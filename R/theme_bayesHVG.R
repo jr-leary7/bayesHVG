@@ -2,7 +2,7 @@
 #'
 #' @name theme_bayesHVG
 #' @author Jack R. Leary
-#' @importFrom ggplot2 theme_classic theme element_rect
+#' @importFrom ggplot2 theme_classic theme element_rect element_line element_blank
 #' @description A publication-ready theme for creating gene expression scatterplots, embedding plots, etc.
 #' @param base.size The base font size. Defaults to 12.
 #' @param base.lwd The base linewidth. Defaults to 0.75.

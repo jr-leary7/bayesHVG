@@ -21,6 +21,7 @@ Imports:
     S4Vectors, 
     posterior, 
     tidyselect, 
+    SeuratObject, 
     BiocGenerics, 
     SingleCellExperiment
 Suggests: 
