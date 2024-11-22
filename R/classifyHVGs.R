@@ -4,6 +4,7 @@
 #' @author Jack R. Leary
 #' @description After estimating per-gene statistics, classify genes as highly variable or not in a variety of ways.
 #' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
+#' @param selection.variable A string specifying the random variable used to select HVGs. Must be one of "sigma2" or "theta". Defaults to "sigma2". 
 #' @param selection.method A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", "quantile", or "cutoff". Defaults to "rank".  
 #' @param n.HVG An integer specifying the number of HVGs to select (if using rank-based selection). Defaults to 2000. 
 #' @param quantile.HVG A double specifying the quantile cutoff used to classify HVGs (if using quantile-based selection). Defaults to 0.75. 
@@ -20,12 +21,15 @@
 #' @export
 
 classifyHVGs <- function(sc.obj = NULL, 
+                         selection.variable = "sigma2", 
                          selection.method = "rank", 
                          n.HVG = 2000L, 
                          quantile.HVG = 0.75, 
                          dispersion.cutoff = 3) {
   # check inputs 
   if (is.null(sc.obj)) { stop("Please provide an object to classifyHVGs().") }
+  selection.variable <- tolower(selection.variable)
+  if (!selection.variable %in% c("sigma2", "theta")) { stop("Please provide a valid random variable used to select HVGs.") }
   selection.method <- tolower(selection.method)
   if (!selection.method %in% c("rank", "quantile", "cutoff")) { stop("Please provide a valid HVG selection method to classifyHVGs().") }
   # extract gene mean & dispersion statistics 
