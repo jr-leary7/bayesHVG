@@ -8,9 +8,10 @@ findVariableFeaturesBayes(
   sc.obj = NULL,
   subject.id = NULL,
   n.cells.subsample = 500L,
-  n.chains = 4L,
+  n.chains = 3L,
   thin.rate = 5L,
-  n.cores = 4L,
+  n.cores.chain = 3L,
+  n.cores.per.chain = 2L,
   random.seed = 312,
   verbose = FALSE
 )
@@ -22,11 +23,13 @@ findVariableFeaturesBayes(
 
 \item{n.cells.subsample}{An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.}
 
-\item{n.chains}{(Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 4.}
+\item{n.chains}{(Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 3.}
 
 \item{thin.rate}{(Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.}
 
-\item{n.cores}{An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.}
+\item{n.cores.chain}{An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 3.}
+
+\item{n.cores.per.chain}{An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.}
 
 \item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
 

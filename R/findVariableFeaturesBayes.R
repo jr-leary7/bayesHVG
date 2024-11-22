@@ -6,17 +6,19 @@
 #' @param sc.obj An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.
 #' @param subject.id A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.
 #' @param n.cells.subsample An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.
-#' @param n.chains (Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 4.
-#' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5. 
-#' @param n.cores An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 4.
+#' @param n.chains (Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 3.
+#' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.
+#' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 3.
+#' @param n.cores.per.chain An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.
 #' @param random.seed A double specifying the random seed to be used when fitting the model. Defaults to 312.
-#' @param verbose (Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE. 
+#' @param verbose (Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.
 #' @import cmdstanr
 #' @import magrittr
+#' @importFrom parallel detectCores
 #' @importFrom SingleCellExperiment colData rowData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
-#' @importFrom dplyr mutate select with_groups slice_sample filter summarise arrange desc left_join pull row_number
+#' @importFrom dplyr mutate select with_groups slice_sample filter summarise arrange desc left_join inner_join pull row_number rowwise ungroup
 #' @importFrom tidyr pivot_longer
 #' @importFrom tidyselect matches all_of everything
 #' @importFrom stats quantile
@@ -33,13 +35,16 @@
 findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       subject.id = NULL,
                                       n.cells.subsample = 500L,
-                                      n.chains = 4L,
-                                      thin.rate = 5L, 
-                                      n.cores = 4L,
-                                      random.seed = 312, 
+                                      n.chains = 3L,
+                                      thin.rate = 5L,
+                                      n.cores.chain = 3L,
+                                      n.cores.per.chain = 2L,
+                                      random.seed = 312,
                                       verbose = FALSE) {
   # check inputs
   if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
+  n_cores_total <- n.cores.chain + n.cores.per.chain
+  if (n_cores_total > parallel::detectCores()) { stop("The total number of requested cores is greater than the number of available cores on your machine.") }
   # extract (sparse) counts matrix
   if (inherits(sc.obj, "SingleCellExperiment")) {
     if (!is.null(subject.id)) {
@@ -80,8 +85,8 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                dplyr::mutate(gene = factor(gene, levels = unique(gene)))
   }
   # convert from tibble to data.frame & convert count to integer to save space
-  expr_df <- as.data.frame(expr_df) %>% 
-             dplyr::mutate(count = as.integer(count)) %>% 
+  expr_df <- as.data.frame(expr_df) %>%
+             dplyr::mutate(count = as.integer(count)) %>%
              dplyr::select(-cell)
   # create model formula
   if (!is.null(subject.id)) {
@@ -93,7 +98,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   priors <- c(brms::set_prior("normal(0, 10)", class = "Intercept", resp = "mu"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "mu"),
               brms::set_prior("normal(0, 5)", class = "Intercept", resp = "shape"),
-              brms::set_prior("student_t(3, 0, 10)", class = "sd", resp = "shape"))
+              brms::set_prior("student_t(3, 0, 3)", class = "sd", resp = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
   if (verbose) {
     brms_fit <- brms::brm(model_formula,
@@ -102,8 +107,9 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                           chains = n.chains,
                           iter = 1000,
                           warmup = 250,
-                          thin = thin.rate, 
-                          cores = n.cores,
+                          thin = thin.rate,
+                          cores = n.cores.chain,
+                          threads = n.cores.per.chain,
                           silent = 2,
                           backend = "cmdstanr",
                           algorithm = "meanfield",
@@ -116,8 +122,9 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             chains = n.chains,
                             iter = 1000,
                             warmup = 250,
-                            thin = thin.rate, 
-                            cores = n.cores,
+                            thin = thin.rate,
+                            cores = n.cores.chain,
+                            threads = n.cores.per.chain,
                             silent = 2,
                             backend = "cmdstanr",
                             algorithm = "meanfield",
@@ -136,9 +143,9 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                          values_to = "mu_re") %>%
                      as.data.frame() %>%
                      dplyr::mutate(gene = gsub(",Intercept\\]", "", gsub("r_gene\\[", "", gene)),
-                                   mu = exp(intercept + mu_re), 
+                                   mu = exp(intercept + mu_re),
                                    sample = dplyr::row_number())
-  mu_summary <- dplyr::with_groups(mu_samples_long, 
+  mu_summary <- dplyr::with_groups(mu_samples_long,
                                    gene,
                                    dplyr::summarise,
                                    mu_mean = mean(mu),
@@ -153,34 +160,34 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                             cols = !intercept,
                                             names_to = "gene",
                                             values_to = "theta_re") %>%
-                        as.data.frame() %>% 
+                        as.data.frame() %>%
                         dplyr::mutate(gene = gsub(",Intercept\\]", "", gsub("r_gene__shape\\[", "", gene)),
-                                      theta = 1 / exp(intercept + theta_re), 
+                                      theta = exp(intercept + theta_re),
                                       sample = dplyr::row_number())
-  theta_summary <- dplyr::with_groups(theta_samples_long, 
+  theta_summary <- dplyr::with_groups(theta_samples_long,
                                       gene,
                                       dplyr::summarise,
                                       theta_mean = mean(theta),
                                       theta_var = var(theta),
                                       theta_ci_ll = stats::quantile(theta, 0.025),
                                       theta_ci_ul = stats::quantile(theta, 0.975))
-  # estimate posterior variance 
-  var_samples_long <- dplyr::inner_join(mu_samples_long, 
-                                        theta_samples_long, 
-                                        by = c("gene", "sample")) %>% 
-                      dplyr::rowwise() %>% 
-                      dplyr::mutate(sigma2 = mu * (1 + mu / theta)) %>% 
+  # estimate posterior gene variances
+  var_samples_long <- dplyr::inner_join(mu_samples_long,
+                                        theta_samples_long,
+                                        by = c("gene", "sample")) %>%
+                      dplyr::rowwise() %>%
+                      dplyr::mutate(sigma2 = mu * (1 + mu / theta)) %>%
                       dplyr::ungroup()
-  var_summary <- dplyr::with_groups(var_samples_long, 
+  var_summary <- dplyr::with_groups(var_samples_long,
                                     gene,
                                     dplyr::summarise,
                                     sigma2_mean = mean(sigma2),
                                     sigma2_var = var(sigma2),
                                     sigma2_ci_ll = stats::quantile(sigma2, 0.025),
                                     sigma2_ci_ul = stats::quantile(sigma2, 0.975))
-  # coerce summaries to a single data.frame 
+  # coerce summaries to a single data.frame
   gene_summary <- dplyr::inner_join(mu_summary, theta_summary, by = "gene") %>%
-                  dplyr::inner_join(var_summary, by = "gene") %>% 
+                  dplyr::inner_join(var_summary, by = "gene") %>%
                   magrittr::set_rownames(.$gene)
   # add gene-level estimates to object metadata
   if (inherits(sc.obj, "SingleCellExperiment")) {

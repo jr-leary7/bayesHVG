@@ -10,7 +10,7 @@ classifyHVGs(
   selection.method = "rank",
   n.HVG = 2000L,
   quantile.HVG = 0.75,
-  dispersion.cutoff = 3
+  cutoff = 3
 )
 }
 \arguments{
@@ -24,7 +24,7 @@ classifyHVGs(
 
 \item{quantile.HVG}{A double specifying the quantile cutoff used to classify HVGs (if using quantile-based selection). Defaults to 0.75.}
 
-\item{dispersion.cutoff}{A double specifying the cutoff value for dispersion used to classify HVGs (if using cutoff-based selection). Defaults to 3.}
+\item{cutoff}{A double specifying the cutoff value for dispersion or variance (depending on how \code{selection.variable} is defined) used to classify HVGs (if using cutoff-based selection). Defaults to 3.}
 }
 \value{
 Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.

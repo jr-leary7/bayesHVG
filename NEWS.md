@@ -1,3 +1,10 @@
+# Changes ion v0.0.2
+
++ Added conditional support for `Seurat` v4 objects in addition to `Seurat` v5 objects. 
++ Added per-gene estimated variances based on NB variance definition, along with credible intervals per-gene. 
++ Implemented ability to select HVGs by either estimated dispersion or estimated variance in `classifyHVGs()`. 
++ Changed model fitting process to support within-chain parallelism as long as enough cores are available. 
+
 # Changes in v0.0.1
 
 + Initial package skeleton. 
