@@ -10,6 +10,7 @@
 #' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.
 #' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 3.
 #' @param n.cores.per.chain An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.
+#' @param opencl.params (Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.
 #' @param random.seed A double specifying the random seed to be used when fitting the model. Defaults to 312.
 #' @param verbose (Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.
 #' @import cmdstanr
@@ -30,6 +31,7 @@
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added to the appropriate metadata slot.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
 #' @seealso \code{\link[scran]{modelGeneVar}}
+#' @seealso \code{\link[brms]{brm}}
 #' @export
 
 findVariableFeaturesBayes <- function(sc.obj = NULL,
@@ -39,12 +41,19 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       thin.rate = 5L,
                                       n.cores.chain = 3L,
                                       n.cores.per.chain = 2L,
+                                      opencl.params = NULL, 
                                       random.seed = 312,
                                       verbose = FALSE) {
   # check inputs
   if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
   n_cores_total <- n.cores.chain + n.cores.per.chain
   if (n_cores_total > parallel::detectCores()) { stop("The total number of requested cores is greater than the number of available cores on your machine.") }
+  if (!is.null(opencl.params) && !is.double(opencl.params)) { stop("Argument opencl.params must be a double vector if non-NULL.") }
+  if (is.null(opencl.params)) {
+    opencl_IDs <- NULL
+  } else {
+    opencl_IDs <- opencl.params
+  }
   # extract (sparse) counts matrix
   if (inherits(sc.obj, "SingleCellExperiment")) {
     if (!is.null(subject.id)) {
@@ -110,6 +119,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                           thin = thin.rate,
                           cores = n.cores.chain,
                           threads = n.cores.per.chain,
+                          opencl = opencl_IDs, 
                           silent = 2,
                           backend = "cmdstanr",
                           algorithm = "meanfield",
@@ -125,6 +135,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                             thin = thin.rate,
                             cores = n.cores.chain,
                             threads = n.cores.per.chain,
+                            opencl = opencl_IDs, 
                             silent = 2,
                             backend = "cmdstanr",
                             algorithm = "meanfield",
@@ -162,7 +173,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                             values_to = "theta_re") %>%
                         as.data.frame() %>%
                         dplyr::mutate(gene = gsub(",Intercept\\]", "", gsub("r_gene__shape\\[", "", gene)),
-                                      theta = exp(intercept + theta_re),
+                                      theta = 1 / exp(intercept + theta_re),
                                       sample = dplyr::row_number())
   theta_summary <- dplyr::with_groups(theta_samples_long,
                                       gene,

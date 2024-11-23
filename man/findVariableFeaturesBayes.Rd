@@ -12,6 +12,7 @@ findVariableFeaturesBayes(
   thin.rate = 5L,
   n.cores.chain = 3L,
   n.cores.per.chain = 2L,
+  opencl.params = NULL,
   random.seed = 312,
   verbose = FALSE
 )
@@ -31,6 +32,8 @@ findVariableFeaturesBayes(
 
 \item{n.cores.per.chain}{An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.}
 
+\item{opencl.params}{(Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.}
+
 \item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
 
 \item{verbose}{(Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.}
@@ -45,6 +48,8 @@ This function implements HVG estimation using Bayesian variational inference to 
 \code{\link[Seurat]{FindVariableFeatures}}
 
 \code{\link[scran]{modelGeneVar}}
+
+\code{\link[brms]{brm}}
 }
 \author{
 Jack R. Leary
