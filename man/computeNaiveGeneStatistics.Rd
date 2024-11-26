@@ -2,7 +2,7 @@
 % Please edit documentation in R/computeNaiveGeneStatistics.R
 \name{computeNaiveGeneStatistics}
 \alias{computeNaiveGeneStatistics}
-\title{Compute the naive mean, variance, and dispersion of expression.}
+\title{Compute the naive mean, variance, and dispersion of gene expression.}
 \usage{
 computeNaiveGeneStatistics(sc.obj = NULL)
 }

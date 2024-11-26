@@ -23,7 +23,7 @@ computeNaiveGeneStatistics <- function(sc.obj = NULL) {
                                      assay = Seurat::DefaultAssay(sc.obj))
   }
   if (!inherits(expr_mat, "dgCMatrix")) {
-    expr_mat <- as(exprt_mat, "dgCMatrix")
+    expr_mat <- as(expr_mat, "dgCMatrix")
   }
   # compute per-gene means 
   gene_mu <- unname(sparseMatrixStats::rowMeans2(expr_mat))
