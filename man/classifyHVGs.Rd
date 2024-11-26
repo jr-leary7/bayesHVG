@@ -6,7 +6,7 @@
 \usage{
 classifyHVGs(
   sc.obj = NULL,
-  selection.variable = "sigma2",
+  selection.variable = "dispersion",
   selection.method = "rank",
   n.HVG = 2000L,
   quantile.HVG = 0.75,
@@ -16,7 +16,7 @@ classifyHVGs(
 \arguments{
 \item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
 
-\item{selection.variable}{A string specifying the random variable used to select HVGs. Must be one of "sigma2" or "theta". Defaults to "sigma2".}
+\item{selection.variable}{A string specifying the random variable used to select HVGs. Must be one of "dispersion" or "sigma2". Defaults to "dispersion".}
 
 \item{selection.method}{A string specifying what method should be used to classify genes as HVGs. Must be one of "rank", "quantile", or "cutoff". Defaults to "rank".}
 
