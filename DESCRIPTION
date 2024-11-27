@@ -25,6 +25,7 @@ Imports:
     tidyselect, 
     SeuratObject, 
     BiocGenerics, 
+    sparseMatrixStats, 
     SingleCellExperiment
 Suggests: 
     testthat (>= 3.0.0)

@@ -8,6 +8,8 @@ findVariableFeaturesBayes(
   sc.obj = NULL,
   subject.id = NULL,
   n.cells.subsample = 500L,
+  iter.per.chain = 1000L,
+  warmup.per.chain = 250L,
   n.chains = 3L,
   thin.rate = 5L,
   n.cores.chain = 3L,
@@ -20,9 +22,13 @@ findVariableFeaturesBayes(
 \arguments{
 \item{sc.obj}{An object of class \code{Seurat} or \code{SingleCellExperiment}. Defaults to NULL.}
 
-\item{subject.id}{A string specifying the metadata column in \code{expr.mat} that contains subject IDs. Defaults to NULL.}
+\item{subject.id}{A string specifying the metadata column in \code{sc.obj} that contains subject IDs. Defaults to NULL.}
 
 \item{n.cells.subsample}{An integer specifying the number of cells per-gene to subsample to when performing estimation. Defaults to 500.}
+
+\item{iter.per.chain}{An integer specifying the number of iterations per chain. Defaults to 1000L.}
+
+\item{warmup.per.chain}{An integer specifying the number of warmup (burn-in) iterations per chain. Defaults to 250.}
 
 \item{n.chains}{(Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 3.}
 
@@ -34,7 +40,7 @@ findVariableFeaturesBayes(
 
 \item{opencl.params}{(Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.}
 
-\item{random.seed}{A double specifying the random seed to be used when fitting the model. Defaults to 312.}
+\item{random.seed}{A double specifying the random seed to be used when fitting and sampling from the model. Defaults to 312.}
 
 \item{verbose}{(Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.}
 }
