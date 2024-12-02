@@ -29,7 +29,6 @@
 #' @importFrom brms set_prior brm bf negbinomial
 #' @importFrom posterior as_draws_df
 #' @importFrom S4Vectors DataFrame
-#' @importFrom SeuratObject Version
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with gene-level statistics added to the appropriate metadata slot.
 #' @seealso \code{\link[Seurat]{FindVariableFeatures}}
 #' @seealso \code{\link[scran]{modelGeneVar}}
@@ -104,14 +103,14 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
              dplyr::select(-cell)
   # create model formula
   if (!is.null(subject.id)) {
-    model_formula <- brms::bf(count ~ 1 + (1 || gene) + (1 || subject), 
-                              shape ~ 1 + (1 || gene) + (1 || subject))
+    model_formula <- brms::bf(count ~ 1 + (1 | gene) + (1 | subject), 
+                              shape ~ 1 + (1 | gene) + (1 | subject))
   } else {
-    model_formula <- brms::bf(count ~ 1 + (1 || gene), 
-                              shape ~ 1 + (1 || gene))
+    model_formula <- brms::bf(count ~ 1 + (1 | gene), 
+                              shape ~ 1 + (1 | gene))
   }
   # set up priors
-  priors <- c(brms::set_prior("normal(0, 10)", class = "Intercept", dpar = "mu"),
+  priors <- c(brms::set_prior("normal(0, 5)", class = "Intercept", dpar = "mu"),
               brms::set_prior("student_t(3, 0, 10)", class = "sd", dpar = "mu"),
               brms::set_prior("normal(0, 3)", class = "Intercept", dpar = "shape"),
               brms::set_prior("student_t(3, 0, 3)", class = "sd", dpar = "shape"))
@@ -230,27 +229,30 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                        S4Vectors::DataFrame()
     SingleCellExperiment::rowData(sc.obj) <- gene_summary_s4
   } else if (inherits(sc.obj, "Seurat")) {
-    if (substr(SeuratObject::Version(sc.obj), 1, 1) == "5") {
-      orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
-    } else {
+    version_check <- try({
+      slot(sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]], name = "meta.data")
+    }, silent = TRUE)
+    if (inherits(version_check, "try-error")) {
       orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.features
+    } else {
+      orig_metadata <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
     }
     if (ncol(orig_metadata) > 0) {
       new_metadata <- dplyr::mutate(orig_metadata,
                                     gene = rownames(sc.obj),
                                     .before = 1) %>%
                       dplyr::left_join(gene_summary, by = "gene")
-      if (substr(SeuratObject::Version(sc.obj), 1, 1) == "5") {
-        sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- new_metadata
-      } else {
+      if (inherits(version_check, "try-error")) {
         sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.features <- new_metadata
+      } else {
+        sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- new_metadata
       }
     } else {
       gene_summary <- gene_summary[rownames(sc.obj), ]
-      if (substr(SeuratObject::Version(sc.obj), 1, 1) == "5") {
-        sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
-      } else {
+      if (inherits(version_check, "try-error")) {
         sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.features <- gene_summary
+      } else {
+        sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
       }
     }
   }

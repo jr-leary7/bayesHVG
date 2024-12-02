@@ -23,7 +23,6 @@ Imports:
     S4Vectors, 
     posterior, 
     tidyselect, 
-    SeuratObject, 
     BiocGenerics, 
     sparseMatrixStats, 
     SingleCellExperiment
