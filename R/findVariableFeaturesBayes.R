@@ -98,7 +98,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                    values_to = "count") %>%
                dplyr::with_groups(c(gene, subject),
                                   dplyr::slice_sample,
-                                  n = min(n.cells.subsample, dplyr::n())) %>%
+                                  n = n.cells.subsample) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)),
                              subject = factor(subject, levels = unique(subject)))
   } else {
@@ -108,7 +108,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                    values_to = "count") %>%
                dplyr::with_groups(gene,
                                   dplyr::slice_sample,
-                                  n = min(n.cells.subsample, dplyr::n())) %>%
+                                  n = n.cells.subsample) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)))
   }
   # convert from tibble to data.frame & convert count to integer to save space
