@@ -1,4 +1,11 @@
-# Changes ion v0.0.2
+# Changes in v0.0.3
+
++ Updated support for v4 vs. v5 `Seurat` objects. 
++ Exposed choice of variational inference algorithm to the user via argument `VI.algorithm` in `findvariableFeaturesBayes()`. 
++ Updated documentation thoroughly. 
++ Removed QR decomposition on fixed effects as it wasn't necessary. 
+
+# Changes in v0.0.2
 
 + Added conditional support for legacy `Seurat` v4 objects in addition to the default `Seurat` v5 objects. 
 + Added per-gene estimated posterior variances and dispersions based on NB variance definition, along with credible intervals for each per-gene. 
