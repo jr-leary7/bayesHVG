@@ -16,7 +16,6 @@
 #' @importFrom dplyr select arrange desc slice_head pull mutate filter if_else
 #' @importFrom stats quantile
 #' @importFrom S4Vectors DataFrame
-#' @importFrom SeuratObject Version
 #' @return Depending on the input, either an object of class \code{Seurat} or \code{SingleCellExperiment} with HVG metadata added.
 #' @seealso \code{\link{findVariableFeaturesBayes}}
 #' @seealso \code{\link[SeuratObject]{HVFInfo}}
@@ -40,10 +39,13 @@ classifyHVGs <- function(sc.obj = NULL,
   if (inherits(sc.obj, "SingleCellExperiment")) {
     gene_summary <- as.data.frame(SingleCellExperiment::rowData(sc.obj))
   } else if (inherits(sc.obj, "Seurat")) {
-    if (substr(SeuratObject::Version(sc.obj), 1, 1) == "5") {
-      gene_summary <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
-    } else {
+    version_check <- try({
+      slot(sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]], name = "meta.data")
+    }, silent = TRUE)
+    if (inherits(version_check, "try-error")) {
       gene_summary <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.features
+    } else {
+      gene_summary <- sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data
     }
   }
   # identify HVGs based on user-specified method
@@ -66,10 +68,10 @@ classifyHVGs <- function(sc.obj = NULL,
   if (inherits(sc.obj, "SingleCellExperiment")) {
     SingleCellExperiment::rowData(sc.obj) <- S4Vectors::DataFrame(gene_summary)
   } else if (inherits(sc.obj, "Seurat")) {
-    if (substr(SeuratObject::Version(sc.obj), 1, 1) == "5") {
-      sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
-    } else {
+    if (inherits(version_check, "try-error")) {
       sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.features <- gene_summary
+    } else {
+      sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@meta.data <- gene_summary
     }
     Seurat::VariableFeatures(sc.obj) <- hvgs
   }
