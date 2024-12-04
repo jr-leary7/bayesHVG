@@ -12,7 +12,7 @@
 #' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.
 #' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 3.
 #' @param n.cores.per.chain An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.
-#' @param VI.algorithm (Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", or "pathfinder". Defaults to "meanfield".
+#' @param VI.algorithm (Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", "laplace", or "pathfinder". Defaults to "meanfield".
 #' @param opencl.params (Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.
 #' @param random.seed A double specifying the random seed to be used when fitting and sampling from the model. Defaults to 312.
 #' @param verbose (Optional) A Boolean specifying whether or not verbose model output should be printed to the console. Defaults to FALSE.
@@ -65,7 +65,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   if (n_cores_total > parallel::detectCores()) { stop("The total number of requested cores is greater than the number of available cores on your machine.") }
   if (n.cores.chain != n.chains) { warning("In general, the number of cores should equal the number of chains for optimal performance.") }
   VI.algorithm <- tolower(VI.algorithm)
-  if (!VI.algorithm %in% c("meanfield", "fullrank", "pathfinder")) { stop("Please provide a valid VI algorithm.") }
+  if (!VI.algorithm %in% c("meanfield", "fullrank", "pathfinder", "laplace")) { stop("Please provide a valid VI algorithm.") }
   if (!is.null(opencl.params) && (!is.double(opencl.params) || !length(opencl.params) == 2)) { stop("Argument opencl.params must be a double vector if non-NULL.") }
   if (is.null(opencl.params)) {
     opencl_IDs <- NULL
@@ -275,7 +275,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     if (inherits(sc.obj, "SingleCellExperiment")) {
       sc.obj@metadata$brms_fit <- brms_fit
     } else if (inherits(sc.obj, "Seurat")) {
-      sc.obj@Assays[[Seurat::DefaultAssay(sc.obj)]]@misc$brms_fit <- brms_fit
+      sc.obj@assays[[Seurat::DefaultAssay(sc.obj)]]@misc$brms_fit <- brms_fit
     }
   }
   return(sc.obj)

@@ -40,7 +40,7 @@ findVariableFeaturesBayes(
 
 \item{n.cores.per.chain}{An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.}
 
-\item{VI.algorithm}{(Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", or "pathfinder". Defaults to "meanfield".}
+\item{VI.algorithm}{(Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", "laplace", or "pathfinder". Defaults to "meanfield".}
 
 \item{opencl.params}{(Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.}
 
