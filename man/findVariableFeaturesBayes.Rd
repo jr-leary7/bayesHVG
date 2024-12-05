@@ -14,6 +14,7 @@ findVariableFeaturesBayes(
   thin.rate = 5L,
   n.cores.chain = 3L,
   n.cores.per.chain = 2L,
+  model.priors = NULL,
   VI.algorithm = "meanfield",
   opencl.params = NULL,
   random.seed = 312,
@@ -40,6 +41,8 @@ findVariableFeaturesBayes(
 
 \item{n.cores.per.chain}{An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.}
 
+\item{model.priors}{A vector containing priors to be used in model fitting. If left NULL, intelligent priors will be set internally. See \code{\link[brms]{set_prior}} for details. Defaults to NULL.}
+
 \item{VI.algorithm}{(Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", "laplace", or "pathfinder". Defaults to "meanfield".}
 
 \item{opencl.params}{(Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.}
@@ -63,6 +66,7 @@ This function implements HVG estimation using Bayesian variational inference to 
 \item In general, increasing \code{n.chains} will increase the model's performance at the cost of extra computational resource usage. If possible, set \code{n.cores} equal to \code{n.chains} for optimal processing speed.
 \item While we have implemented GPU acceleration via OpenCL through the argument \code{opencl.params}, OpenCL acceleration is not supported on every machine. For example, Apple M-series chips do not support double-precision floating-points, which are necessary for Stan to compile. For more information, see \href{https://discourse.mc-stan.org/t/gpus-on-mac-osx-apple-m1/23375/5}{this Stan forums thread}. In order to correctly specify the OpenCL platform and device IDs, use the \code{clinfo} command line utility.  
 \item The user can specify which variational inference (VI) algorithm to use to fit the model via the argument \code{VI.algorithm}. For further details, see \href{https://www.jmlr.org/papers/volume18/16-107/16-107.pdf}{this paper} comparing the meanfield and fullrank algorithms, and \href{https://doi.org/10.48550/arXiv.2108.03782}{this preprint} that introduced the Pathfinder algorithm. For a primer on automatic differentiation variational inference (ADVI), see \href{https://doi.org/10.48550/arXiv.1506.03431}{this preprint}. Lastly, \href{https://discourse.mc-stan.org/t/issues-with-differences-between-mcmc-and-pathfinder-results-how-to-make-pathfinder-or-something-else-more-accurate/35992}{this Stan forums thread} lays out some pratical differences between the algorithms. 
+\item If \code{save.model} is set to TRUE, the full model fit will be saved to the appropriate unstructured metadata slot of \code{sc.obj}. This allows the user to inspect the final fit and perform posterior predictive checks, but the model object takes up a lot of space. As such, it is recommended to remove it from \code{sc.obj} by setting the appropriate slot to NULL before saving it to disk.
 }
 }
 \seealso{

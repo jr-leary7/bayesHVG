@@ -12,6 +12,7 @@
 #' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.
 #' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 3.
 #' @param n.cores.per.chain An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 2.
+#' @param model.priors A vector containing priors to be used in model fitting. If left NULL, intelligent priors will be set internally. See \code{\link[brms]{set_prior}} for details. Defaults to NULL. 
 #' @param VI.algorithm (Optional) A string specifying the variational inference algorithm to be used. Must be one of "meanfield", "fullrank", "laplace", or "pathfinder". Defaults to "meanfield".
 #' @param opencl.params (Optional) A two-element double vector specifying the platform and device IDs of the OpenCL GPU device. Most users should specify \code{c(0, 0)}. See \code{\link[brms]{opencl}} for more details. Defaults to NULL.
 #' @param random.seed A double specifying the random seed to be used when fitting and sampling from the model. Defaults to 312.
@@ -24,6 +25,7 @@
 #' \item In general, increasing \code{n.chains} will increase the model's performance at the cost of extra computational resource usage. If possible, set \code{n.cores} equal to \code{n.chains} for optimal processing speed.
 #' \item While we have implemented GPU acceleration via OpenCL through the argument \code{opencl.params}, OpenCL acceleration is not supported on every machine. For example, Apple M-series chips do not support double-precision floating-points, which are necessary for Stan to compile. For more information, see \href{https://discourse.mc-stan.org/t/gpus-on-mac-osx-apple-m1/23375/5}{this Stan forums thread}. In order to correctly specify the OpenCL platform and device IDs, use the \code{clinfo} command line utility.  
 #' \item The user can specify which variational inference (VI) algorithm to use to fit the model via the argument \code{VI.algorithm}. For further details, see \href{https://www.jmlr.org/papers/volume18/16-107/16-107.pdf}{this paper} comparing the meanfield and fullrank algorithms, and \href{https://doi.org/10.48550/arXiv.2108.03782}{this preprint} that introduced the Pathfinder algorithm. For a primer on automatic differentiation variational inference (ADVI), see \href{https://doi.org/10.48550/arXiv.1506.03431}{this preprint}. Lastly, \href{https://discourse.mc-stan.org/t/issues-with-differences-between-mcmc-and-pathfinder-results-how-to-make-pathfinder-or-something-else-more-accurate/35992}{this Stan forums thread} lays out some pratical differences between the algorithms. 
+#' \item If \code{save.model} is set to TRUE, the full model fit will be saved to the appropriate unstructured metadata slot of \code{sc.obj}. This allows the user to inspect the final fit and perform posterior predictive checks, but the model object takes up a lot of space. As such, it is recommended to remove it from \code{sc.obj} by setting the appropriate slot to NULL before saving it to disk.
 #' }
 #' @import cmdstanr
 #' @import magrittr
@@ -54,23 +56,30 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                       thin.rate = 5L,
                                       n.cores.chain = 3L,
                                       n.cores.per.chain = 2L,
+                                      model.priors = NULL, 
                                       VI.algorithm = "meanfield", 
                                       opencl.params = NULL, 
                                       random.seed = 312,
                                       verbose = FALSE, 
                                       save.model = FALSE) {
-  # check inputs
+  # check & parse inputs
   if (is.null(sc.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
   n_cores_total <- n.cores.chain * n.cores.per.chain
   if (n_cores_total > parallel::detectCores()) { stop("The total number of requested cores is greater than the number of available cores on your machine.") }
   if (n.cores.chain != n.chains) { warning("In general, the number of cores should equal the number of chains for optimal performance.") }
   VI.algorithm <- tolower(VI.algorithm)
   if (!VI.algorithm %in% c("meanfield", "fullrank", "pathfinder", "laplace")) { stop("Please provide a valid VI algorithm.") }
-  if (!is.null(opencl.params) && (!is.double(opencl.params) || !length(opencl.params) == 2)) { stop("Argument opencl.params must be a double vector if non-NULL.") }
+  if (!is.null(opencl.params) && (!is.double(opencl.params) || !length(opencl.params) == 2)) { stop("Argument opencl.params must be a double vector of length 2 if non-NULL.") }
   if (is.null(opencl.params)) {
     opencl_IDs <- NULL
   } else {
     opencl_IDs <- opencl.params
+  }
+  if (is.null(model.priors)) {
+    model.priors <- c(brms::set_prior("normal(0, 2)", class = "Intercept", dpar = "mu"),
+                      brms::set_prior("student_t(3, 0, 2)", class = "sd", dpar = "mu"),
+                      brms::set_prior("normal(0, 2)", class = "Intercept", dpar = "shape"),
+                      brms::set_prior("student_t(3, 0, 2)", class = "sd", dpar = "shape"))
   }
   # extract (sparse) counts matrix
   if (inherits(sc.obj, "SingleCellExperiment")) {
@@ -123,15 +132,10 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     model_formula <- brms::bf(count ~ 1 + (1 | gene), 
                               shape ~ 1 + (1 | gene))
   }
-  # set up priors
-  priors <- c(brms::set_prior("normal(0, 5)", class = "Intercept", dpar = "mu"),
-              brms::set_prior("student_t(3, 0, 10)", class = "sd", dpar = "mu"),
-              brms::set_prior("normal(0, 3)", class = "Intercept", dpar = "shape"),
-              brms::set_prior("student_t(3, 0, 3)", class = "sd", dpar = "shape"))
   # fit negative-binomial hierarchical bayesian model via variational inference
   if (verbose) {
     brms_fit <- brms::brm(model_formula,
-                          prior = priors, 
+                          prior = model.priors, 
                           data = expr_df,
                           family = brms::negbinomial(link = "log", link_shape = "log"),
                           chains = n.chains,
@@ -150,7 +154,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   } else {
     withr::with_output_sink(tempfile(), {
       brms_fit <- brms::brm(model_formula,
-                            prior = priors, 
+                            prior = model.priors, 
                             data = expr_df,
                             family = brms::negbinomial(link = "log", link_shape = "log"),
                             chains = n.chains,
