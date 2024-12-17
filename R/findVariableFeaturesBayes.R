@@ -33,7 +33,7 @@
 #' @importFrom SingleCellExperiment colData rowData
 #' @importFrom BiocGenerics counts
 #' @importFrom Seurat GetAssayData DefaultAssay
-#' @importFrom dplyr mutate select with_groups slice_sample n filter summarise arrange desc left_join inner_join pull row_number
+#' @importFrom dplyr mutate select with_groups ntile slice_sample n filter summarise arrange desc left_join inner_join pull row_number
 #' @importFrom tidyr pivot_longer
 #' @importFrom tidyselect matches all_of everything
 #' @importFrom stats quantile
@@ -98,6 +98,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   # convert counts matrix to long data.frame for modeling
   expr_df <- as.data.frame(expr_mat) %>%
              dplyr::mutate(gene = rownames(.), .before = 1)
+  sampled_cells_per_quintile <- round(n.cells.subsample / 5)
   if (!is.null(subject.id)) {
     expr_df <- dplyr::mutate(expr_df,
                              subject = subject_vec,
@@ -105,9 +106,12 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                tidyr::pivot_longer(cols = !c(gene, subject),
                                    names_to = "cell",
                                    values_to = "count") %>%
-               dplyr::with_groups(c(gene, subject),
+               dplyr::with_groups(c(gene, subject), 
+                                  dplyr::mutate, 
+                                  quintile = dplyr::ntile(count, 5)) %>% 
+               dplyr::with_groups(c(gene, subject, quintile),
                                   dplyr::slice_sample,
-                                  n = n.cells.subsample) %>%
+                                  n = sampled_cells_per_quintile) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)),
                              subject = factor(subject, levels = unique(subject)))
   } else {
@@ -115,15 +119,18 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
                                    cols = !gene,
                                    names_to = "cell",
                                    values_to = "count") %>%
-               dplyr::with_groups(gene,
+               dplyr::with_groups(gene, 
+                                  dplyr::mutate, 
+                                  quintile = dplyr::ntile(count, 5)) %>% 
+               dplyr::with_groups(c(gene, quintile),
                                   dplyr::slice_sample,
-                                  n = n.cells.subsample) %>%
+                                  n = sampled_cells_per_quintile) %>%
                dplyr::mutate(gene = factor(gene, levels = unique(gene)))
   }
   # convert from tibble to data.frame & convert count to integer to save space
   expr_df <- as.data.frame(expr_df) %>%
              dplyr::mutate(count = as.integer(count)) %>%
-             dplyr::select(-cell)
+             dplyr::select(-c(cell, quintile))
   # create model formula
   if (!is.null(subject.id)) {
     model_formula <- brms::bf(count ~ 1 + (1 | gene) + (1 | subject), 
