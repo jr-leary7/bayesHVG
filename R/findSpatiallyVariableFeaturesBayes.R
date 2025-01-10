@@ -21,12 +21,21 @@
 #' \itemize{
 #' \item This function utilizes a multivariate Gaussian process (GP) to account for spatial variation while estimating per-gene means, variances, and dispersions.
 #' }
-#' @import cmdstanr
 #' @import magrittr
+#' @import cmdstanr
+#' @importFrom parallel detectCores
+#' @importFrom Seurat GetAssayData DefaultAssay GetTissueCoordinates
+#' @importFrom dplyr relocate
+#' @importFrom stats quantile
+#' @importFrom withr with_output_sink
+#' @importFrom brms bf gp brm negbinomial
+#' @importFrom posterior as_draws_df
+#' @seealso \code{\link[Seurat]{FindSpatiallyVariableFeatures}}
+#' @seealso \code{\link[brms]{brm}}
 
 findSpatiallyVariableFeaturesBayes <- function() {
   # check & parse inputs
-  if (is.null(spatial.obj)) { stop("Please provide all inputs to findVariableFeaturesBayes().") }
+  if (is.null(spatial.obj)) { stop("Please provide all inputs to findSpatiallyVariableFeaturesBayes().") }
   n_cores_total <- n.cores.chain * n.cores.per.chain
   if (n_cores_total > parallel::detectCores()) { stop("The total number of requested cores is greater than the number of available cores on your machine.") }
   if (n.cores.chain != n.chains) { warning("In general, the number of cores should equal the number of chains for optimal performance.") }
@@ -39,4 +48,14 @@ findSpatiallyVariableFeaturesBayes <- function() {
   } else {
     opencl_IDs <- opencl.params
   }
+  # extract (sparse) counts matrix and spatial coordinates
+  expr_mat <- Seurat::GetAssayData(spatial.obj,
+                                   assay = Seurat::DefaultAssay(spatial.obj),
+                                   layer = "counts")
+  spatial_coords <- Seurat::GetTissueCoordinates(spatial.obj) %>%
+                    dplyr::relocate(cell)
+  # convert counts matrix to long data.frame for modeling
+  sampled_cells_per_quintile <- round(n.cells.subsample / 5)
+  expr_df <- as.data.frame(expr_mat) %>%
+             dplyr::mutate(gene = rownames(.), .before = 1)
 }
