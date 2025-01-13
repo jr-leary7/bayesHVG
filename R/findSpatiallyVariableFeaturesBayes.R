@@ -9,7 +9,7 @@
 #' @param warmup.per.chain An integer specifying the number of warmup (burn-in) iterations per chain. Defaults to 250.
 #' @param n.chains (Optional) An integer specifying the number of chains used when performing variational inference. Defaults to 1.
 #' @param thin.rate (Optional) An integer specifying the thinning rate of the VI algorithm. Defaults to 5.
-#' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical model. Defaults to 1.
+#' @param n.cores.chain An integer specifying the number of cores to be used when fitting the Bayesian hierarchical Gaussian process model. Defaults to 1.
 #' @param n.cores.per.chain An integer specifying the number of cores to be used within each chain when fitting the Bayesian hierarchical model. Defaults to 4.
 #' @param model.priors A vector containing priors to be used in model fitting. If left NULL, intelligent priors will be set internally. See \code{\link[brms]{set_prior}} for details. Defaults to NULL.
 #' @param algorithm (Optional) A string specifying the variational inference or sampling algorithm to be used. Must be one of "meanfield", "fullrank", "laplace", "pathfinder" (all approximate methods) or "sampling" for MCMC via NUTS. Note that MCMC will be slower than using a VI algorithm or the Laplace approximation. Defaults to "meanfield".
@@ -25,15 +25,31 @@
 #' @import cmdstanr
 #' @importFrom parallel detectCores
 #' @importFrom Seurat GetAssayData DefaultAssay GetTissueCoordinates
-#' @importFrom dplyr relocate
+#' @importFrom dplyr relocate mutate with_groups ntile slice_sample select pull row_number summarise inner_join left_join
+#' @importFrom tidyr pivot_longer
 #' @importFrom stats quantile
 #' @importFrom withr with_output_sink
 #' @importFrom brms bf gp brm negbinomial
 #' @importFrom posterior as_draws_df
+#' @importFrom 
 #' @seealso \code{\link[Seurat]{FindSpatiallyVariableFeatures}}
 #' @seealso \code{\link[brms]{brm}}
+#' @export 
 
-findSpatiallyVariableFeaturesBayes <- function() {
+findSpatiallyVariableFeaturesBayes <- function(spatial.obj = NULL, 
+                                               n.spots.subsample = 500L, 
+                                               iter.per.chain = 1000L, 
+                                               warump.per.chain = 250L, 
+                                               n.chains = 1L, 
+                                               thin.rate = 5L, 
+                                               n.cores.chain = 1L, 
+                                               n.cores.per.chain = 4L, 
+                                               model.priors = NULL, 
+                                               algorithm = "meanfield", 
+                                               opencl.params = NULL, 
+                                               random.seed = 312, 
+                                               verbose = FALSE, 
+                                               save.model = FALSE) {
   # check & parse inputs
   if (is.null(spatial.obj)) { stop("Please provide all inputs to findSpatiallyVariableFeaturesBayes().") }
   n_cores_total <- n.cores.chain * n.cores.per.chain
@@ -57,5 +73,108 @@ findSpatiallyVariableFeaturesBayes <- function() {
   # convert counts matrix to long data.frame for modeling
   sampled_cells_per_quintile <- round(n.cells.subsample / 5)
   expr_df <- as.data.frame(expr_mat) %>%
-             dplyr::mutate(gene = rownames(.), .before = 1)
+             dplyr::mutate(gene = rownames(.), .before = 1) %>% 
+             tidyr::pivot_longer(cols = !gene,
+                                 names_to = "spot",
+                                 values_to = "count") %>%
+             dplyr::with_groups(gene,
+                                dplyr::mutate,
+                                quintile = dplyr::ntile(count, 5)) %>%
+             dplyr::with_groups(c(gene, quintile),
+                                dplyr::slice_sample,
+                                n = sampled_cells_per_quintile) %>%
+             dplyr::mutate(gene = factor(gene, levels = unique(gene)))
+  # convert from tibble to data.frame & convert count to integer to save space
+  expr_df <- as.data.frame(expr_df) %>%
+             dplyr::mutate(count = as.integer(count)) %>%
+             dplyr::select(-c(spot, quintile))
+  # create model formula 
+  model_formula <- brms::bf(count ~ 1 + gp(x, y, scale = TRUE, k = 20, cov = "exp_quad") +  (1 | gene), 
+                            shape ~ 1)
+  # fit negative-binomial hierarchical bayesian gaussian process model 
+  if (verbose) {
+    brms_fit <- brms::brm(model_formula, 
+                          data = expr_df,
+                          family = brms::negbinomial(link = "log", link_shape = "log"),
+                          chains = 1L,
+                          iter = 1000L,
+                          warmup = 250L,
+                          thin = 5L,
+                          cores = 1L,
+                          threads = 4L,
+                          normalize = FALSE, 
+                          silent = 2,
+                          backend = "cmdstanr",
+                          algorithm = "meanfield",
+                          stan_model_args = list(stanc_options = list("O1")), 
+                          seed = 312)
+  } else {
+    withr::with_output_sink(tempfile(), {
+      brms_fit <- brms::brm(model_formula, 
+                            data = expr_df,
+                            family = brms::negbinomial(link = "log", link_shape = "log"),
+                            chains = 1L,
+                            iter = 1000L,
+                            warmup = 250L,
+                            thin = 5L,
+                            cores = 1L,
+                            threads = 4L,
+                            normalize = FALSE, 
+                            silent = 2,
+                            backend = "cmdstanr",
+                            algorithm = "meanfield",
+                            stan_model_args = list(stanc_options = list("O1")), 
+                            seed = 312)
+    })
+  }
+  if (verbose) {
+    message("Drawing from the posterior and summarizing ...")
+  }
+  # draw samples from approximate posterior
+  posterior_samples <- as.data.frame(posterior::as_draws_df(brms_fit))
+  # estimate posterior gene means
+  mu_intercept <- dplyr::pull(posterior_samples, b_Intercept)
+  
+  # estimate posterior gene overdispersions
+  theta_intercept <- dplyr::pull(posterior_samples, b_shape_Intercept)
+  
+  # coerce summaries to a single data.frame
+  gene_summary <- dplyr::inner_join(mu_summary, theta_summary, by = "gene") %>%
+                  dplyr::inner_join(sigma2_summary, by = "gene") %>%
+                  magrittr::set_rownames(.$gene)
+  if (verbose) {
+    message("Posterior summarization complete!")
+  }
+  # add gene-level estimates to object metadata
+  version_check <- try({
+    slot(spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]], name = "meta.data")
+  }, silent = TRUE)
+  if (inherits(version_check, "try-error")) {
+    orig_metadata <- spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.features
+  } else {
+    orig_metadata <- spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.data
+  }
+  if (ncol(orig_metadata) > 0) {
+    new_metadata <- dplyr::mutate(orig_metadata,
+                                  gene = rownames(spatial.obj),
+                                  .before = 1) %>%
+                    dplyr::left_join(gene_summary, by = "gene")
+    if (inherits(version_check, "try-error")) {
+      spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.features <- new_metadata
+    } else {
+      spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.data <- new_metadata
+    }
+  } else {
+    gene_summary <- gene_summary[rownames(spatial.obj), ]
+    if (inherits(version_check, "try-error")) {
+      spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.features <- gene_summary
+    } else {
+      spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@meta.data <- gene_summary
+    }
+  }
+  # optionally save model fit to object's unstructured metadata
+  if (save.model) {
+    spatial.obj@assays[[Seurat::DefaultAssay(spatial.obj)]]@misc$brms_fit <- brms_fit
+  }
+  return(spatial.obj)
 }

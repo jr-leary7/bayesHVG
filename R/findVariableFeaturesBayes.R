@@ -140,7 +140,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
     model_formula <- brms::bf(count ~ 1 + (1 | gene),
                               shape ~ 1 + (1 | gene))
   }
-  # fit negative-binomial hierarchical bayesian model via variational inference
+  # fit negative-binomial hierarchical bayesian model 
   if (verbose) {
     brms_fit <- brms::brm(model_formula,
                           prior = model.priors,
@@ -183,7 +183,7 @@ findVariableFeaturesBayes <- function(sc.obj = NULL,
   if (verbose) {
     message("Drawing from the posterior and summarizing ...")
   }
-  # draw samples from approximate posterior and remove unnecessary columns
+  # draw samples from approximate posterior
   posterior_samples <- as.data.frame(posterior::as_draws_df(brms_fit))
   # estimate posterior gene means
   mu_intercept <- dplyr::pull(posterior_samples, b_Intercept)
