@@ -8,7 +8,8 @@ theme_bayesHVG(
   base.size = 12,
   base.lwd = 0.75,
   base.family = "sans",
-  umap = FALSE
+  umap = FALSE,
+  spatial = FALSE
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ theme_bayesHVG(
 \item{base.family}{The font family to be used throughout. Defaults to "sans".}
 
 \item{umap}{(Optional) If set to TRUE, removes axis text and ticks for a cleaner look. Defaults to FALSE.}
+
+\item{spatial}{(Optional) If set to true, provides a box around the spatial representation of the data and cleans up the axes. Defaults to FALSE.}
 }
 \value{
 A \code{ggplot2} theme.

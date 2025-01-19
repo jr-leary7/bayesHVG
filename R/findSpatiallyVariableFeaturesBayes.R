@@ -25,13 +25,12 @@
 #' @import cmdstanr
 #' @importFrom parallel detectCores
 #' @importFrom Seurat GetAssayData DefaultAssay GetTissueCoordinates
-#' @importFrom dplyr relocate mutate with_groups ntile slice_sample select pull row_number summarise inner_join left_join
+#' @importFrom dplyr relocate mutate rename with_groups ntile slice_sample select pull row_number summarise inner_join left_join
 #' @importFrom tidyr pivot_longer
 #' @importFrom stats quantile
 #' @importFrom withr with_output_sink
 #' @importFrom brms bf gp brm negbinomial
 #' @importFrom posterior as_draws_df
-#' @importFrom 
 #' @seealso \code{\link[Seurat]{FindSpatiallyVariableFeatures}}
 #' @seealso \code{\link[brms]{brm}}
 #' @export 
@@ -69,14 +68,17 @@ findSpatiallyVariableFeaturesBayes <- function(spatial.obj = NULL,
                                    assay = Seurat::DefaultAssay(spatial.obj),
                                    layer = "counts")
   spatial_coords <- Seurat::GetTissueCoordinates(spatial.obj) %>%
-                    dplyr::relocate(cell)
+                    dplyr::rename(spot = cell) %>% 
+                    dplyr::relocate(spot)
   # convert counts matrix to long data.frame for modeling
   sampled_cells_per_quintile <- round(n.cells.subsample / 5)
-  expr_df <- as.data.frame(expr_mat) %>%
+  expr_df <- as.data.frame(expr_mat) %>% 
              dplyr::mutate(gene = rownames(.), .before = 1) %>% 
              tidyr::pivot_longer(cols = !gene,
                                  names_to = "spot",
                                  values_to = "count") %>%
+             dplyr::left_join(spatial_coords, by = "spot") %>% 
+             dplyr::relocate(spot, gene, x, y) %>% 
              dplyr::with_groups(gene,
                                 dplyr::mutate,
                                 quintile = dplyr::ntile(count, 5)) %>%
@@ -89,7 +91,7 @@ findSpatiallyVariableFeaturesBayes <- function(spatial.obj = NULL,
              dplyr::mutate(count = as.integer(count)) %>%
              dplyr::select(-c(spot, quintile))
   # create model formula 
-  model_formula <- brms::bf(count ~ 1 + gp(x, y, scale = TRUE, k = 20, cov = "exp_quad") +  (1 | gene), 
+  model_formula <- brms::bf(count ~ 1 + gp(x, y, scale = TRUE, k = 20, cov = "exp_quad"), 
                             shape ~ 1)
   # fit negative-binomial hierarchical bayesian gaussian process model 
   if (verbose) {
@@ -103,7 +105,7 @@ findSpatiallyVariableFeaturesBayes <- function(spatial.obj = NULL,
                           cores = 1L,
                           threads = 4L,
                           normalize = FALSE, 
-                          silent = 2,
+                          silent = 1,
                           backend = "cmdstanr",
                           algorithm = "meanfield",
                           stan_model_args = list(stanc_options = list("O1")), 
